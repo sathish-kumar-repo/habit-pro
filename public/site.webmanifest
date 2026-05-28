@@ -1,0 +1,36 @@
+{
+  "name": "Habito — Daily Habit Tracker",
+  "short_name": "Habito",
+  "description": "A premium habit tracking workspace for building consistency, routines, and long-term growth.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#050816",
+  "background_color": "#050816",
+
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+
+  "categories": ["productivity", "lifestyle", "health", "utilities"],
+
+  "lang": "en",
+  "dir": "ltr"
+}
