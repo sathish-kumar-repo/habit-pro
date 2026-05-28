@@ -229,7 +229,6 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
               )}
             </button>
 
-            {/* Desktop-only action buttons — always visible on lg+ */}
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onEdit(habit.id)}
