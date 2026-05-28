@@ -22,6 +22,7 @@ export type Habit = {
   endDate: string;
   track: Record<string, TrackEntry>;
   color: string;
+  icon: string;
   createdAt: number;
 };
 
@@ -45,6 +46,7 @@ export const habitSchema = z
     start: z.date({ message: "Start date is required" }),
     end: z.date({ message: "End date is required" }),
     color: z.string().min(1),
+    icon: z.string().min(1).default("Star"),
   })
   .refine((d) => d.end >= d.start, {
     message: "End date must be on or after start date",
@@ -221,6 +223,7 @@ type FirestoreChallenge = {
   challengeEndDate: Timestamp;
   track: FirestoreTrack;
   color?: string;
+  icon?: string;
   createdAt?: number;
 };
 
@@ -263,6 +266,7 @@ function fromFirestore(id: string, data: FirestoreChallenge): Habit {
     endDate: fmtDate(end),
     track,
     color: data.color ?? COLORS[0],
+    icon: data.icon ?? "Star",
     createdAt: data.createdAt ?? Date.now(),
   };
 }
@@ -291,6 +295,7 @@ export async function createHabit(input: {
   start: Date;
   end: Date;
   color: string;
+  icon: string;
 }): Promise<void> {
   const id = crypto.randomUUID();
   const track = buildTrack(input.start, input.end);
@@ -303,6 +308,7 @@ export async function createHabit(input: {
     challengeEndDate: Timestamp.fromDate(input.end),
     track: toFirestoreTrack(track),
     color: input.color,
+    icon: input.icon,
     createdAt: Date.now(),
   };
   await setDoc(doc(db, CHALLENGE_COLLECTION, id), payload);
@@ -339,6 +345,7 @@ export async function updateHabit(
     start: Date;
     end: Date;
     color: string;
+    icon: string;
   },
 ): Promise<void> {
   const track = buildTrack(input.start, input.end);
@@ -356,5 +363,6 @@ export async function updateHabit(
     challengeEndDate: Timestamp.fromDate(input.end),
     track: toFirestoreTrack(track),
     color: input.color,
+    icon: input.icon,
   });
 }

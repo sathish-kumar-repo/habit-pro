@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { X } from "lucide-react";
 import { COLORS, createHabit, habitSchema } from "@/lib/habits";
 import { DatePickerWithPresets } from "./DatePickerWithPresets";
+import { HABIT_ICONS, HabitIcon, DEFAULT_ICON } from "./HabitIcon";
 import type { z } from "zod";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -46,6 +47,7 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
     return d;
   });
   const [color, setColor] = useState(COLORS[0]);
+  const [icon, setIcon] = useState<string>(DEFAULT_ICON);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -61,6 +63,7 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
     e.setHours(0, 0, 0, 0);
     setEnd(e);
     setColor(COLORS[0]);
+    setIcon(DEFAULT_ICON);
     setErrors({});
   };
 
@@ -77,7 +80,7 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
       });
       return;
     }
-    const result = habitSchema.safeParse({ name, description, plan, start, end, color });
+    const result = habitSchema.safeParse({ name, description, plan, start, end, color, icon });
     if (!result.success) {
       const fe: FieldErrors = {};
       for (const issue of result.error.issues) {
@@ -140,6 +143,33 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
           error={errors.end}
         />
       </div>
+      <Field label="Icon">
+        <div className="grid grid-cols-8 gap-1.5 pt-1">
+          {HABIT_ICONS.map((iconName) => {
+            const selected = icon === iconName;
+            return (
+              <button
+                key={iconName}
+                onClick={() => setIcon(iconName)}
+                className="flex items-center justify-center rounded-xl transition-all active:scale-90"
+                style={{
+                  height: 40,
+                  background: selected ? color : "oklch(1 0 0 / 0.05)",
+                  outline: selected ? `2px solid ${color}` : "1px solid oklch(1 0 0 / 0.08)",
+                  outlineOffset: selected ? 2 : 0,
+                }}
+                aria-label={iconName}
+              >
+                <HabitIcon
+                  name={iconName}
+                  className="size-4"
+                  style={{ color: selected ? "white" : "oklch(0.65 0.01 240)" }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </Field>
       <Field label="Color accent">
         <div className="flex flex-wrap gap-3 pt-1">
           {COLORS.map((c) => (

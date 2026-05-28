@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Habit, progress, streak, today, fmtDate } from "@/lib/habits";
 import { Flame, Trash2, Check, Pencil, CheckCircle2 } from "lucide-react";
+import { HabitIcon } from "./HabitIcon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -210,9 +211,17 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
                 <span className="size-1.5 rounded-full" style={{ background: habit.color }} />
                 {habit.startDate} → {habit.endDate}
               </div>
-              <h3 className="mt-1.5 font-display text-[22px] leading-tight text-foreground">
-                {habit.name}
-              </h3>
+              <div className="mt-1.5 flex items-center gap-2.5">
+                <span
+                  className="flex size-8 shrink-0 items-center justify-center rounded-xl"
+                  style={{ background: `${habit.color}20`, color: habit.color }}
+                >
+                  <HabitIcon name={habit.icon} className="size-4" />
+                </span>
+                <h3 className="font-display text-[22px] leading-tight text-foreground">
+                  {habit.name}
+                </h3>
+              </div>
               {habit.description && (
                 <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                   {habit.description}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Flame,
   TrendingUp,
+  TrendingDown,
   Calendar,
   Plus,
   CheckCircle2,
@@ -11,7 +12,15 @@ import {
   LayoutGrid,
   RefreshCw,
   StickyNote,
+  Trophy,
+  ArrowUpDown,
+  Zap,
+  ChevronRight,
+  Activity,
+  CalendarCheck,
+  Award,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import {
   Habit,
   classify,
@@ -28,6 +37,7 @@ import { HabitCard } from "@/components/habits/HabitCard";
 import { AddHabitDialog } from "@/components/habits/AddHabitDialog";
 import { HabitDetailDialog } from "@/components/habits/HabitDetailDialog";
 import { EditHabitDialog } from "@/components/habits/EditHabitDialog";
+import { HabitIcon } from "@/components/habits/HabitIcon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,6 +58,9 @@ const FILTERS = [
 type FilterId = (typeof FILTERS)[number]["id"];
 type AppTab = "today" | "habits" | "progress";
 
+type ProgressRange = "7d" | "30d" | "all";
+type ProgressSort = "pct" | "streak" | "name";
+
 /* ─── shared data hook ───────────────────────── */
 function useAppData() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -56,6 +69,8 @@ function useAppData() {
   const [editId, setEditId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [tab, setTab] = useState<AppTab>("today");
+  const [progressRange, setProgressRange] = useState<ProgressRange>("7d");
+  const [progressSort, setProgressSort] = useState<ProgressSort>("pct");
 
   useEffect(() => {
     const u = subscribeHabits(setHabits);
@@ -115,6 +130,206 @@ function useAppData() {
     return out;
   }, [habits]);
 
+  const rollup30 = useMemo(() => {
+    const out: { key: string; label: string; done: number; total: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const key = fmtDate(d);
+      let done = 0,
+        total = 0;
+      habits.forEach((h) => {
+        const e = h.track[key];
+        if (e) {
+          total++;
+          if (e.done) done++;
+        }
+      });
+      const isWeekStart = d.getDay() === 0;
+      out.push({
+        key,
+        label: isWeekStart ? d.toLocaleDateString("en", { month: "short", day: "numeric" }) : "",
+        done,
+        total,
+      });
+    }
+    return out;
+  }, [habits]);
+
+  const rollupMonthly = useMemo(() => {
+    const monthMap: Record<
+      string,
+      { done: number; total: number; label: string; sortKey: string }
+    > = {};
+    habits.forEach((h) => {
+      Object.entries(h.track).forEach(([, e]) => {
+        const d = e.date;
+        const sortKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+        if (!monthMap[sortKey]) {
+          monthMap[sortKey] = {
+            done: 0,
+            total: 0,
+            sortKey,
+            label: d.toLocaleString("en", { month: "short", year: "2-digit" }),
+          };
+        }
+        monthMap[sortKey].total++;
+        if (e.done) monthMap[sortKey].done++;
+      });
+    });
+    return Object.values(monthMap).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  }, [habits]);
+
+  const weekdayStats = useMemo(() => {
+    const days = [
+      { day: 0, label: "Sun", done: 0, total: 0 },
+      { day: 1, label: "Mon", done: 0, total: 0 },
+      { day: 2, label: "Tue", done: 0, total: 0 },
+      { day: 3, label: "Wed", done: 0, total: 0 },
+      { day: 4, label: "Thu", done: 0, total: 0 },
+      { day: 5, label: "Fri", done: 0, total: 0 },
+      { day: 6, label: "Sat", done: 0, total: 0 },
+    ];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    habits.forEach((h) => {
+      Object.values(h.track).forEach((e) => {
+        const d = new Date(e.date);
+        d.setHours(0, 0, 0, 0);
+        if (d > now) return;
+        const wd = d.getDay();
+        days[wd].total++;
+        if (e.done) days[wd].done++;
+      });
+    });
+    return days.map((d) => ({ ...d, pct: d.total ? Math.round((d.done / d.total) * 100) : 0 }));
+  }, [habits]);
+
+  const periodComparison = useMemo(() => {
+    const compute = (offset: number, window: number) => {
+      let done = 0,
+        total = 0;
+      for (let i = offset; i < offset + window; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        const key = fmtDate(d);
+        habits.forEach((h) => {
+          const e = h.track[key];
+          if (e) {
+            total++;
+            if (e.done) done++;
+          }
+        });
+      }
+      return total ? Math.round((done / total) * 100) : 0;
+    };
+    const this7 = compute(0, 7),
+      last7 = compute(7, 7);
+    const this30 = compute(0, 30),
+      last30 = compute(30, 30);
+    return { this7, last7, delta7: this7 - last7, this30, last30, delta30: this30 - last30 };
+  }, [habits]);
+
+  const personalRecords = useMemo(() => {
+    const dayMap: Record<string, { done: number; total: number }> = {};
+    habits.forEach((h) => {
+      Object.entries(h.track).forEach(([key, e]) => {
+        if (!dayMap[key]) dayMap[key] = { done: 0, total: 0 };
+        dayMap[key].total++;
+        if (e.done) dayMap[key].done++;
+      });
+    });
+    let bestDayCount = 0;
+    Object.values(dayMap).forEach(({ done }) => {
+      if (done > bestDayCount) bestDayCount = done;
+    });
+    const allKeys = Object.keys(dayMap).sort();
+    let bestWeekPct = 0;
+    for (let i = 0; i <= allKeys.length - 7; i++) {
+      let done = 0,
+        total = 0;
+      for (let j = i; j < Math.min(i + 7, allKeys.length); j++) {
+        done += dayMap[allKeys[j]].done;
+        total += dayMap[allKeys[j]].total;
+      }
+      if (total > 0) bestWeekPct = Math.max(bestWeekPct, Math.round((done / total) * 100));
+    }
+    const longestEver = habits.reduce((max, h) => {
+      const keys = Object.keys(h.track).sort(
+        (a, b) => h.track[a].date.getTime() - h.track[b].date.getTime(),
+      );
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      let m = 0,
+        cur = 0;
+      for (const key of keys) {
+        const e = h.track[key];
+        const d = new Date(e.date);
+        d.setHours(0, 0, 0, 0);
+        if (d > now) break;
+        if (e.done) {
+          cur++;
+          m = Math.max(m, cur);
+        } else cur = 0;
+      }
+      return Math.max(max, m);
+    }, 0);
+    return { bestDayCount, bestWeekPct, longestEver };
+  }, [habits]);
+
+  const consistencyScore = useMemo(() => {
+    if (habits.length === 0) return 0;
+    const compScore = Math.round((stats.avg / 100) * 50);
+    const streakScore = Math.min(30, stats.bestStreak * 2);
+    const todayKey = today();
+    const yDate = new Date();
+    yDate.setDate(yDate.getDate() - 1);
+    yDate.setHours(0, 0, 0, 0);
+    const yKey = fmtDate(yDate);
+    const anyToday = habits.some((h) => h.track[todayKey]?.done);
+    const anyYest = habits.some((h) => h.track[yKey]?.done);
+    const recencyScore = anyToday ? 20 : anyYest ? 10 : 0;
+    return Math.min(100, compScore + streakScore + recencyScore);
+  }, [habits, stats]);
+
+  const perHabitExtended = useMemo(() => {
+    return habits.map((h) => {
+      const keys = Object.keys(h.track).sort(
+        (a, b) => h.track[a].date.getTime() - h.track[b].date.getTime(),
+      );
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      let maxStreak = 0,
+        curSt = 0;
+      for (const key of keys) {
+        const e = h.track[key];
+        const d = new Date(e.date);
+        d.setHours(0, 0, 0, 0);
+        if (d > now) break;
+        if (e.done) {
+          curSt++;
+          maxStreak = Math.max(maxStreak, curSt);
+        } else curSt = 0;
+      }
+      const lastKey = keys[keys.length - 1];
+      const end = lastKey ? new Date(h.track[lastKey].date) : now;
+      end.setHours(0, 0, 0, 0);
+      const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
+      const { done, total, pct } = progress(h);
+      return {
+        habit: h,
+        longestStreak: maxStreak,
+        daysRemaining,
+        done,
+        total,
+        pct,
+        currentStreak: streak(h),
+      };
+    });
+  }, [habits]);
+
   const todayHabits = useMemo(() => {
     const t = today();
     return habits
@@ -159,6 +374,8 @@ function useAppData() {
     filtered,
     stats,
     rollup,
+    rollup30,
+    rollupMonthly,
     todayHabits,
     handleDelete,
     toggleToday,
@@ -166,6 +383,15 @@ function useAppData() {
     saveNote,
     openHabit,
     editHabit,
+    progressRange,
+    setProgressRange,
+    progressSort,
+    setProgressSort,
+    weekdayStats,
+    periodComparison,
+    personalRecords,
+    consistencyScore,
+    perHabitExtended,
   };
 }
 
@@ -635,163 +861,740 @@ function DesktopHabits({
 }
 
 /* ── Desktop Progress ── */
-function DesktopProgress({ stats, rollup, habits }: AppProps) {
+function DesktopProgress({
+  stats,
+  rollup,
+  rollup30,
+  rollupMonthly,
+  habits,
+  counts,
+  progressRange,
+  setProgressRange,
+  progressSort,
+  setProgressSort,
+  setOpenId,
+  weekdayStats,
+  periodComparison,
+  consistencyScore,
+  perHabitExtended,
+  personalRecords,
+}: AppProps) {
+  const chartData = useMemo(() => {
+    const raw =
+      progressRange === "7d" ? rollup : progressRange === "30d" ? rollup30 : rollupMonthly;
+    return raw.map((d) => ({ ...d, ratio: d.total ? Math.round((d.done / d.total) * 100) : 0 }));
+  }, [progressRange, rollup, rollup30, rollupMonthly]);
+
+  const sortedExtended = useMemo(() => {
+    const h = [...perHabitExtended];
+    if (progressSort === "pct") return h.sort((a, b) => b.pct - a.pct);
+    if (progressSort === "streak") return h.sort((a, b) => b.currentStreak - a.currentStreak);
+    return h.sort((a, b) => a.habit.name.localeCompare(b.habit.name));
+  }, [perHabitExtended, progressSort]);
+
+  const totalDone = chartData.reduce((a, x) => a + x.done, 0);
+  const totalPossible = chartData.reduce((a, x) => a + x.total, 0);
+  const overallPct = totalPossible ? Math.round((totalDone / totalPossible) * 100) : 0;
+  const delta =
+    progressRange === "7d"
+      ? periodComparison.delta7
+      : progressRange === "30d"
+        ? periodComparison.delta30
+        : 0;
+  const showDelta = progressRange !== "all";
+  const bestDay = weekdayStats.reduce((b, d) => (d.total > 0 && d.pct > b.pct ? d : b), {
+    ...weekdayStats[0],
+  });
+
+  const scoreR = 36,
+    scoreCirc = 2 * Math.PI * scoreR;
+  const scoreDash = scoreCirc * (1 - consistencyScore / 100);
+  const scoreColor =
+    consistencyScore >= 80
+      ? "var(--color-primary)"
+      : consistencyScore >= 55
+        ? "#E4A12B"
+        : "#E48068";
+  const scoreTier =
+    consistencyScore >= 85
+      ? "Elite"
+      : consistencyScore >= 65
+        ? "Strong"
+        : consistencyScore >= 40
+          ? "Building"
+          : habits.length > 0
+            ? "Starting"
+            : "—";
+
+  const rangeLabels: Record<string, string> = {
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    all: "All time",
+  };
+  const sortLabels: Record<string, string> = {
+    pct: "By progress",
+    streak: "By streak",
+    name: "By name",
+  };
+  const sortOptions: ProgressSort[] = ["pct", "streak", "name"];
+  const [sortOpen, setSortOpen] = useState(false);
+
+  const statusColors = {
+    ongoing: "#20A973",
+    upcoming: "#5DA9E9",
+    finished: "#7F52E0",
+    pending: "#E48068",
+  };
+  const statusLabels = {
+    ongoing: "In motion",
+    upcoming: "Upcoming",
+    finished: "Completed",
+    pending: "Lapsed",
+  };
+  const statusTotal = Object.values(counts).reduce((a, v) => a + v, 0);
+
   return (
     <div className="space-y-5">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {[
-          {
-            label: "Habits tracked",
-            value: stats.total.toString(),
-            hint: "all time",
-            icon: <LayoutGrid className="size-4" />,
-          },
-          {
-            label: "In motion",
-            value: stats.active.toString(),
-            hint: "right now",
-            icon: <Flame className="size-4" />,
-            accent: true,
-          },
-          {
-            label: "Avg progress",
-            value: `${stats.avg}%`,
-            hint: "all habits",
-            icon: <TrendingUp className="size-4" />,
-          },
-          {
-            label: "Best streak",
-            value: `${stats.bestStreak}d`,
-            hint: "longest run",
-            icon: <Flame className="size-4" />,
-            accent: true,
-          },
-        ].map((k) => (
-          <div
-            key={k.label}
-            className="rounded-2xl border border-border bg-card p-5"
-            style={{ boxShadow: "var(--shadow-soft)" }}
-          >
-            <div className="text-muted-foreground">{k.icon}</div>
-            <div
-              className="mt-3 font-display text-4xl leading-none xl:text-5xl"
-              style={k.accent ? { color: "var(--color-primary)" } : undefined}
+      {/* ── Filter bar ── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-1">
+          {(["7d", "30d", "all"] as ProgressRange[]).map((r) => (
+            <button
+              key={r}
+              onClick={() => setProgressRange(r)}
+              className="rounded-lg px-4 py-1.5 text-xs font-medium transition-all active:scale-95"
+              style={
+                progressRange === r
+                  ? { background: "var(--color-primary)", color: "var(--color-primary-foreground)" }
+                  : { color: "var(--color-muted-foreground)" }
+              }
             >
-              {k.value}
+              {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "All Time"}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setSortOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground transition-all hover:text-foreground active:scale-95"
+          >
+            <ArrowUpDown className="size-3.5" />
+            {sortLabels[progressSort]}
+          </button>
+          {sortOpen && (
+            <div
+              className="absolute right-0 top-full z-50 mt-1.5 min-w-[140px] overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+              onMouseLeave={() => setSortOpen(false)}
+            >
+              {sortOptions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setProgressSort(s);
+                    setSortOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-xs transition-colors hover:bg-[oklch(1_0_0_/_0.04)]"
+                  style={{
+                    color: progressSort === s ? "var(--color-primary)" : "var(--color-foreground)",
+                  }}
+                >
+                  {sortLabels[s]}
+                  {progressSort === s && (
+                    <span
+                      className="size-1.5 rounded-full"
+                      style={{ background: "var(--color-primary)" }}
+                    />
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-              {k.label}
-            </div>
-            <div className="mt-0.5 text-xs text-muted-foreground">{k.hint}</div>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-        {/* Weekly chart */}
+      {/* ── KPI row — 5 cards ── */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        {/* 1. Total */}
+        <div
+          className="rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <LayoutGrid className="size-4 text-muted-foreground" />
+          <div className="mt-3 font-display text-4xl leading-none xl:text-5xl">{stats.total}</div>
+          <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Habits tracked
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">all time</div>
+        </div>
+        {/* 2. Active */}
+        <div
+          className="relative overflow-hidden rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{
+              background:
+                "radial-gradient(circle at top right, var(--color-primary) 0%, transparent 70%)",
+            }}
+          />
+          <Zap className="size-4" style={{ color: "var(--color-primary)" }} />
+          <div
+            className="mt-3 font-display text-4xl leading-none xl:text-5xl"
+            style={{ color: "var(--color-primary)" }}
+          >
+            {stats.active}
+          </div>
+          <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            In motion
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">active now</div>
+        </div>
+        {/* 3. Period completion + trend delta */}
+        <div
+          className="rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="flex items-center justify-between">
+            <Activity className="size-4 text-muted-foreground" />
+            {showDelta && delta !== 0 && (
+              <span
+                className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[9px] font-medium"
+                style={{
+                  background:
+                    delta > 0 ? "oklch(0.62 0.16 158 / 0.15)" : "oklch(0.55 0.2 25 / 0.15)",
+                  color: delta > 0 ? "#20A973" : "#E48068",
+                }}
+              >
+                {delta > 0 ? (
+                  <TrendingUp className="size-2.5" />
+                ) : (
+                  <TrendingDown className="size-2.5" />
+                )}
+                {delta > 0 ? "+" : ""}
+                {delta}%
+              </span>
+            )}
+          </div>
+          <div className="mt-3 font-display text-4xl leading-none xl:text-5xl">{overallPct}%</div>
+          <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Completion rate
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {showDelta ? "vs prev period" : "all time avg"}
+          </div>
+        </div>
+        {/* 4. Personal best streak */}
+        <div
+          className="relative overflow-hidden rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{
+              background:
+                "radial-gradient(circle at top right, var(--color-primary) 0%, transparent 70%)",
+            }}
+          />
+          <Trophy className="size-4" style={{ color: "var(--color-primary)" }} />
+          <div
+            className="mt-3 font-display text-4xl leading-none xl:text-5xl"
+            style={{ color: "var(--color-primary)" }}
+          >
+            {personalRecords.longestEver}d
+          </div>
+          <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Longest streak
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">personal record</div>
+        </div>
+        {/* 5. Consistency Score ring */}
+        <div
+          className="rounded-2xl border border-border bg-card p-5 flex flex-col"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Consistency
+          </div>
+          <div className="flex flex-1 items-center gap-3 mt-3">
+            <svg width={80} height={80} viewBox="0 0 88 88" className="shrink-0">
+              <circle
+                cx="44"
+                cy="44"
+                r={scoreR}
+                fill="none"
+                stroke="oklch(1 0 0 / 0.06)"
+                strokeWidth={7}
+              />
+              <circle
+                cx="44"
+                cy="44"
+                r={scoreR}
+                fill="none"
+                stroke={scoreColor}
+                strokeWidth={7}
+                strokeLinecap="round"
+                strokeDasharray={scoreCirc}
+                strokeDashoffset={scoreDash}
+                transform="rotate(-90 44 44)"
+                style={{ transition: "stroke-dashoffset 0.8s ease" }}
+              />
+              <text
+                x="44"
+                y="50"
+                textAnchor="middle"
+                fill="white"
+                fontSize="17"
+                fontFamily="var(--font-display)"
+                fontWeight="700"
+              >
+                {consistencyScore}
+              </text>
+            </svg>
+            <div>
+              <div className="font-display text-xl leading-none" style={{ color: scoreColor }}>
+                {scoreTier}
+              </div>
+              <div className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground">
+                / 100 pts
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Chart + Day-of-week analysis ── */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_280px]">
+        {/* Completion rhythm */}
         <div
           className="rounded-2xl border border-border bg-card p-6"
           style={{ boxShadow: "var(--shadow-soft)" }}
         >
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-5 flex items-end justify-between">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Last 7 days
+                {rangeLabels[progressRange]}
               </div>
-              <h3 className="mt-0.5 font-display text-2xl text-foreground">Weekly rhythm</h3>
+              <h3 className="mt-0.5 font-display text-2xl text-foreground">Completion rhythm</h3>
             </div>
             <div className="text-right">
-              <div className="font-display text-3xl" style={{ color: "var(--color-primary)" }}>
-                {rollup.reduce((a, x) => a + x.done, 0)}
+              <div
+                className="font-display text-3xl leading-none"
+                style={{ color: "var(--color-primary)" }}
+              >
+                {overallPct}%
               </div>
               <div className="font-mono text-[10px] text-muted-foreground">
-                / {rollup.reduce((a, x) => a + x.total, 0)} done
+                {totalDone}/{totalPossible} done
               </div>
             </div>
           </div>
-          <div className="flex items-end gap-3">
-            {rollup.map((d, i) => {
-              const ratio = d.total ? d.done / d.total : 0;
-              const h = Math.max(8, ratio * 140);
-              const isToday = i === rollup.length - 1;
-              return (
-                <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                    {d.done}/{d.total}
-                  </div>
-                  <div className="relative w-full" style={{ height: 140 }}>
-                    <div
-                      className="absolute inset-x-2 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
-                      style={{ height: "100%" }}
+          {chartData.length === 0 ? (
+            <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+              No data for this range
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                data={chartData}
+                barCategoryGap={chartData.length > 20 ? "15%" : "28%"}
+                margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
+              >
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "oklch(0.55 0.01 240)", fontSize: 9, fontFamily: "monospace" }}
+                  interval={chartData.length > 15 ? "preserveStartEnd" : 0}
+                />
+                <YAxis hide domain={[0, 100]} />
+                <Tooltip
+                  cursor={{ fill: "oklch(1 0 0 / 0.03)" }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload as { done: number; total: number; ratio: number };
+                    return (
+                      <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg">
+                        <div className="font-medium text-foreground">
+                          {label || `${d.done}/${d.total}`}
+                        </div>
+                        <div className="mt-0.5 font-mono text-muted-foreground">
+                          {d.done}/{d.total} · {d.ratio}%
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="ratio" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                  {chartData.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={
+                        i === chartData.length - 1
+                          ? "var(--color-primary)"
+                          : entry.ratio >= 80
+                            ? "oklch(0.62 0.16 158 / 0.65)"
+                            : entry.ratio >= 50
+                              ? "oklch(1 0 0 / 0.18)"
+                              : "oklch(1 0 0 / 0.07)"
+                      }
                     />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <div className="mt-3 flex items-center gap-4 flex-wrap">
+            {[
+              { color: "var(--color-primary)", label: "Today / latest" },
+              { color: "oklch(0.62 0.16 158 / 0.65)", label: "≥ 80%" },
+              { color: "oklch(1 0 0 / 0.18)", label: "≥ 50%" },
+              { color: "oklch(1 0 0 / 0.07)", label: "< 50%" },
+            ].map((l) => (
+              <div key={l.label} className="flex items-center gap-1.5">
+                <span className="size-2 rounded-sm" style={{ background: l.color }} />
+                <span className="font-mono text-[8px] text-muted-foreground">{l.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Day-of-week analysis */}
+        <div
+          className="rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="mb-4">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Patterns
+            </div>
+            <h3 className="mt-0.5 font-display text-xl text-foreground">Best days</h3>
+            {bestDay.total > 0 && (
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="font-mono text-[9px] text-muted-foreground">Peak day:</span>
+                <span
+                  className="font-mono text-[9px] font-semibold"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  {bestDay.label} · {bestDay.pct}%
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            {weekdayStats.map((d) => {
+              const isBest = d.total > 0 && d.pct === bestDay.pct && bestDay.total > 0;
+              return (
+                <div key={d.day} className="flex items-center gap-3">
+                  <div className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {d.label}
+                  </div>
+                  <div className="flex-1 h-2 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
                     <div
-                      className="absolute inset-x-2 bottom-0 rounded-md transition-all"
+                      className="h-full rounded-full transition-all duration-700"
                       style={{
-                        height: h,
-                        background: isToday
-                          ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
-                          : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.06))",
+                        width: d.total === 0 ? "0%" : `${d.pct}%`,
+                        background: isBest ? "var(--color-primary)" : "oklch(1 0 0 / 0.22)",
                       }}
                     />
                   </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {d.label}
+                  <div
+                    className="w-9 shrink-0 text-right font-mono text-[10px]"
+                    style={{
+                      color: isBest ? "var(--color-primary)" : "var(--color-muted-foreground)",
+                    }}
+                  >
+                    {d.total === 0 ? "—" : `${d.pct}%`}
                   </div>
                 </div>
               );
             })}
           </div>
+          {weekdayStats.every((d) => d.total === 0) && (
+            <div className="mt-3 text-center text-xs text-muted-foreground">
+              Track habits to see patterns
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Per-habit breakdown */}
+      {/* ── Enhanced habit table + [Records + Status] ── */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_268px]">
+        {/* Enhanced habit breakdown table */}
         <div
-          className="rounded-2xl border border-border bg-card p-5"
+          className="flex flex-col rounded-2xl border border-border bg-card"
           style={{ boxShadow: "var(--shadow-soft)" }}
         >
-          <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            All habits
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Habit breakdown
+            </div>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {habits.length} total
+            </span>
           </div>
           {habits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No habits yet.</p>
+            <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+              No habits yet
+            </div>
           ) : (
-            <div className="space-y-4">
-              {habits.map((h) => {
-                const { done, total, pct } = progress(h);
-                const s = streak(h);
-                return (
-                  <div key={h.id}>
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="size-2 shrink-0 rounded-full"
+            <>
+              <div className="grid grid-cols-[1fr_60px_60px_52px_48px] items-center border-b border-border px-5 py-2">
+                {[
+                  ["Habit", "left"],
+                  ["Streak", "right"],
+                  ["Best", "right"],
+                  ["Rate", "right"],
+                  ["Left", "right"],
+                ].map(([h, align]) => (
+                  <div
+                    key={h}
+                    className={`font-mono text-[8px] uppercase tracking-[0.15em] text-muted-foreground text-${align}`}
+                  >
+                    {h}
+                  </div>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-[oklch(1_0_0_/_0.04)]">
+                {sortedExtended.map((item, i) => {
+                  const {
+                    habit: h,
+                    longestStreak,
+                    daysRemaining,
+                    done,
+                    total,
+                    pct,
+                    currentStreak,
+                  } = item;
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => setOpenId(h.id)}
+                      className="group w-full grid grid-cols-[1fr_60px_60px_52px_48px] items-center px-4 py-3 text-left transition-all hover:bg-[oklch(1_0_0_/_0.03)]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="flex size-7 shrink-0 items-center justify-center rounded-lg font-mono text-[9px] text-white"
                           style={{ background: h.color }}
-                        />
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {h.name}
-                        </span>
+                        >
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <HabitIcon
+                              name={h.icon}
+                              className="size-3 shrink-0"
+                              style={{ color: h.color }}
+                            />
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {h.name}
+                            </span>
+                          </div>
+                          <div className="h-1 mt-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${pct * 100}%`, background: h.color }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground">
-                        <span>
-                          {done}/{total}
-                        </span>
-                        {s > 0 && <span style={{ color: h.color }}>{s}d 🔥</span>}
-                        <span className="font-semibold" style={{ color: h.color }}>
-                          {Math.round(pct * 100)}%
-                        </span>
+                      <div className="text-right">
+                        {currentStreak > 0 ? (
+                          <span
+                            className="flex items-center justify-end gap-0.5 font-mono text-[10px]"
+                            style={{ color: h.color }}
+                          >
+                            <Flame className="size-2.5" />
+                            {currentStreak}d
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[10px] text-muted-foreground">—</span>
+                        )}
                       </div>
+                      <div className="text-right font-mono text-[10px] text-muted-foreground">
+                        {longestStreak > 0 ? `${longestStreak}d` : "—"}
+                      </div>
+                      <div
+                        className="text-right font-mono text-xs font-semibold"
+                        style={{ color: h.color }}
+                      >
+                        {Math.round(pct * 100)}%
+                      </div>
+                      <div className="text-right font-mono text-[10px] text-muted-foreground">
+                        {daysRemaining > 0 ? (
+                          `${daysRemaining}d`
+                        ) : (
+                          <span style={{ color: "var(--color-primary)" }}>✓</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Right column: Personal Records + Status Distribution */}
+        <div className="space-y-5">
+          <div
+            className="rounded-2xl border border-border bg-card p-5"
+            style={{ boxShadow: "var(--shadow-soft)" }}
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <Award className="size-3.5 text-muted-foreground" />
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Personal records
+              </div>
+            </div>
+            <div className="space-y-4">
+              {(
+                [
+                  {
+                    label: "Longest streak",
+                    value:
+                      personalRecords.longestEver > 0 ? `${personalRecords.longestEver} days` : "—",
+                    icon: <Flame className="size-3.5" />,
+                    accent: true,
+                  },
+                  {
+                    label: "Best single day",
+                    value:
+                      personalRecords.bestDayCount > 0
+                        ? `${personalRecords.bestDayCount} habits`
+                        : "—",
+                    icon: <CalendarCheck className="size-3.5" />,
+                    accent: false,
+                  },
+                  {
+                    label: "Best 7-day week",
+                    value:
+                      personalRecords.bestWeekPct > 0 ? `${personalRecords.bestWeekPct}%` : "—",
+                    icon: <TrendingUp className="size-3.5" />,
+                    accent: false,
+                  },
+                ] as const
+              ).map((r) => (
+                <div key={r.label} className="flex items-center gap-3">
+                  <div
+                    className="flex size-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{
+                      background: r.accent ? "var(--color-primary)" : "oklch(1 0 0 / 0.06)",
+                      color: r.accent ? "white" : "var(--color-muted-foreground)",
+                    }}
+                  >
+                    {r.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground">
+                      {r.label}
+                    </div>
+                    <div className="font-display text-lg leading-tight text-foreground">
+                      {r.value}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div
+            className="rounded-2xl border border-border bg-card p-5"
+            style={{ boxShadow: "var(--shadow-soft)" }}
+          >
+            <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Status breakdown
+            </div>
+            <div className="space-y-2.5">
+              {(["ongoing", "upcoming", "finished", "pending"] as const).map((k) => {
+                const count = counts[k];
+                const pct = statusTotal > 0 ? (count / statusTotal) * 100 : 0;
+                return (
+                  <div key={k}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-mono text-[9px] text-muted-foreground">
+                        {statusLabels[k]}
+                      </span>
+                      <span className="font-mono text-[9px] font-medium text-foreground">
+                        {count}
+                      </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
                       <div
                         className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${pct * 100}%`, background: h.color }}
+                        style={{ width: `${pct}%`, background: statusColors[k] }}
                       />
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+              {(["ongoing", "upcoming", "finished", "pending"] as const).map((k) => (
+                <div key={k} className="flex items-center gap-1">
+                  <span className="size-1.5 rounded-full" style={{ background: statusColors[k] }} />
+                  <span className="font-mono text-[8px] text-muted-foreground">
+                    {statusLabels[k]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 30-day heatmap ── */}
+      <div
+        className="rounded-2xl border border-border bg-card p-6"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Heatmap
+            </div>
+            <h3 className="mt-0.5 font-display text-xl text-foreground">Last 30 days</h3>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[8px] text-muted-foreground">Less</span>
+            {[0.05, 0.25, 0.5, 0.75, 1].map((o) => (
+              <span
+                key={o}
+                className="size-3 rounded-sm"
+                style={{ background: "var(--color-primary)", opacity: o }}
+              />
+            ))}
+            <span className="font-mono text-[8px] text-muted-foreground">More</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          {rollup30.map((d, i) => {
+            const ratio = d.total ? d.done / d.total : 0;
+            return (
+              <div
+                key={d.key}
+                className="group relative"
+                title={`${d.key}: ${d.done}/${d.total} (${Math.round(ratio * 100)}%)`}
+              >
+                <div
+                  className="size-5 rounded-sm transition-all"
+                  style={{
+                    background: d.total === 0 ? "oklch(1 0 0 / 0.04)" : "var(--color-primary)",
+                    opacity: d.total === 0 ? 1 : Math.max(0.1, ratio),
+                    outline: i === rollup30.length - 1 ? "2px solid var(--color-primary)" : "none",
+                    outlineOffset: 2,
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 flex items-center gap-6 font-mono text-[9px] text-muted-foreground">
+          {rollup30
+            .filter((d) => d.label)
+            .map((d) => (
+              <span key={d.key}>{d.label}</span>
+            ))}
         </div>
       </div>
     </div>
@@ -1122,159 +1925,24 @@ function MobileApp(p: AppProps) {
 
           {/* PROGRESS */}
           {tab === "progress" && (
-            <div className="space-y-4 pb-6 pt-5">
-              <h2 className="font-display text-2xl text-foreground">Progress</h2>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  {
-                    label: "Tracked",
-                    value: stats.total.toString(),
-                    hint: "all time",
-                    icon: <LayoutGrid className="size-4" />,
-                  },
-                  {
-                    label: "In motion",
-                    value: stats.active.toString(),
-                    hint: "right now",
-                    icon: <Flame className="size-4" />,
-                    accent: true,
-                  },
-                  {
-                    label: "Avg progress",
-                    value: `${stats.avg}%`,
-                    hint: "all habits",
-                    icon: <TrendingUp className="size-4" />,
-                  },
-                  {
-                    label: "Best streak",
-                    value: `${stats.bestStreak}d`,
-                    hint: "longest run",
-                    icon: <Flame className="size-4" />,
-                    accent: true,
-                  },
-                ].map((k) => (
-                  <div
-                    key={k.label}
-                    className="rounded-2xl border border-border bg-card p-4"
-                    style={{ boxShadow: "var(--shadow-soft)" }}
-                  >
-                    <div className="text-muted-foreground">{k.icon}</div>
-                    <div
-                      className="mt-2 font-display text-3xl leading-none"
-                      style={k.accent ? { color: "var(--color-primary)" } : undefined}
-                    >
-                      {k.value}
-                    </div>
-                    <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                      {k.label}
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">{k.hint}</div>
-                  </div>
-                ))}
-              </div>
-              <div
-                className="rounded-2xl border border-border bg-card p-5"
-                style={{ boxShadow: "var(--shadow-soft)" }}
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                      Last 7 days
-                    </div>
-                    <h3 className="mt-0.5 font-display text-xl text-foreground">Weekly rhythm</h3>
-                  </div>
-                  <div className="text-right">
-                    <div
-                      className="font-display text-2xl"
-                      style={{ color: "var(--color-primary)" }}
-                    >
-                      {rollup.reduce((a, x) => a + x.done, 0)}
-                    </div>
-                    <div className="font-mono text-[10px] text-muted-foreground">
-                      / {rollup.reduce((a, x) => a + x.total, 0)} done
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-end gap-2">
-                  {rollup.map((d, i) => {
-                    const ratio = d.total ? d.done / d.total : 0,
-                      h = Math.max(8, ratio * 100),
-                      isToday = i === rollup.length - 1;
-                    return (
-                      <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
-                        <div className="font-mono text-[9px] tabular-nums text-muted-foreground">
-                          {d.done}
-                        </div>
-                        <div className="relative w-full" style={{ height: 100 }}>
-                          <div
-                            className="absolute inset-x-1 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
-                            style={{ height: "100%" }}
-                          />
-                          <div
-                            className="absolute inset-x-1 bottom-0 rounded-md transition-all"
-                            style={{
-                              height: h,
-                              background: isToday
-                                ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
-                                : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
-                            }}
-                          />
-                        </div>
-                        <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                          {d.label}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {p.habits.length > 0 && (
-                <div
-                  className="rounded-2xl border border-border bg-card p-5"
-                  style={{ boxShadow: "var(--shadow-soft)" }}
-                >
-                  <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                    All habits
-                  </div>
-                  <div className="space-y-4">
-                    {p.habits.map((h) => {
-                      const { done, total, pct } = progress(h);
-                      const s = streak(h);
-                      return (
-                        <div key={h.id}>
-                          <div className="mb-1.5 flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                className="size-2 shrink-0 rounded-full"
-                                style={{ background: h.color }}
-                              />
-                              <span className="truncate text-sm font-medium text-foreground">
-                                {h.name}
-                              </span>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground">
-                              <span>
-                                {done}/{total}
-                              </span>
-                              {s > 0 && <span style={{ color: h.color }}>{s}d 🔥</span>}
-                              <span className="font-semibold" style={{ color: h.color }}>
-                                {Math.round(pct * 100)}%
-                              </span>
-                            </div>
-                          </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
-                            <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{ width: `${pct * 100}%`, background: h.color }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <MobileProgress
+              stats={p.stats}
+              rollup={p.rollup}
+              rollup30={p.rollup30}
+              rollupMonthly={p.rollupMonthly}
+              habits={p.habits}
+              counts={p.counts}
+              progressRange={p.progressRange}
+              setProgressRange={p.setProgressRange}
+              progressSort={p.progressSort}
+              setProgressSort={p.setProgressSort}
+              setOpenId={p.setOpenId}
+              weekdayStats={p.weekdayStats}
+              periodComparison={p.periodComparison}
+              consistencyScore={p.consistencyScore}
+              perHabitExtended={p.perHabitExtended}
+              personalRecords={p.personalRecords}
+            />
           )}
         </div>
       </div>
@@ -1351,6 +2019,631 @@ function MobileApp(p: AppProps) {
         >
           <Plus className="size-6" />
         </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Mobile Progress ── */
+function MobileProgress({
+  stats,
+  rollup,
+  rollup30,
+  rollupMonthly,
+  habits,
+  counts,
+  progressRange,
+  setProgressRange,
+  progressSort,
+  setProgressSort,
+  setOpenId,
+  weekdayStats,
+  periodComparison,
+  consistencyScore,
+  perHabitExtended,
+  personalRecords,
+}: {
+  stats: AppProps["stats"];
+  rollup: AppProps["rollup"];
+  rollup30: AppProps["rollup30"];
+  rollupMonthly: AppProps["rollupMonthly"];
+  habits: AppProps["habits"];
+  counts: AppProps["counts"];
+  progressRange: ProgressRange;
+  setProgressRange: (r: ProgressRange) => void;
+  progressSort: ProgressSort;
+  setProgressSort: (s: ProgressSort) => void;
+  setOpenId: (id: string) => void;
+  weekdayStats: AppProps["weekdayStats"];
+  periodComparison: AppProps["periodComparison"];
+  consistencyScore: AppProps["consistencyScore"];
+  perHabitExtended: AppProps["perHabitExtended"];
+  personalRecords: AppProps["personalRecords"];
+}) {
+  const chartData = useMemo(() => {
+    const raw =
+      progressRange === "7d" ? rollup : progressRange === "30d" ? rollup30 : rollupMonthly;
+    return raw.map((d) => ({ ...d, ratio: d.total ? Math.round((d.done / d.total) * 100) : 0 }));
+  }, [progressRange, rollup, rollup30, rollupMonthly]);
+
+  const sortedExtended = useMemo(() => {
+    const h = [...perHabitExtended];
+    if (progressSort === "pct") return h.sort((a, b) => b.pct - a.pct);
+    if (progressSort === "streak") return h.sort((a, b) => b.currentStreak - a.currentStreak);
+    return h.sort((a, b) => a.habit.name.localeCompare(b.habit.name));
+  }, [perHabitExtended, progressSort]);
+
+  const totalDone = chartData.reduce((a, x) => a + x.done, 0);
+  const totalPossible = chartData.reduce((a, x) => a + x.total, 0);
+  const overallPct = totalPossible ? Math.round((totalDone / totalPossible) * 100) : 0;
+  const delta =
+    progressRange === "7d"
+      ? periodComparison.delta7
+      : progressRange === "30d"
+        ? periodComparison.delta30
+        : 0;
+  const showDelta = progressRange !== "all";
+  const bestDay = weekdayStats.reduce((b, d) => (d.total > 0 && d.pct > b.pct ? d : b), {
+    ...weekdayStats[0],
+  });
+
+  const scoreColor =
+    consistencyScore >= 80
+      ? "var(--color-primary)"
+      : consistencyScore >= 55
+        ? "#E4A12B"
+        : "#E48068";
+  const scoreTier =
+    consistencyScore >= 85
+      ? "Elite"
+      : consistencyScore >= 65
+        ? "Strong"
+        : consistencyScore >= 40
+          ? "Building"
+          : habits.length > 0
+            ? "Starting"
+            : "—";
+  const sortLabels: Record<ProgressSort, string> = {
+    pct: "Progress",
+    streak: "Streak",
+    name: "Name",
+  };
+
+  return (
+    <div className="space-y-4 pb-6 pt-4">
+      {/* Title + sort */}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display text-2xl text-foreground">Progress</h2>
+        <button
+          onClick={() => {
+            const order: ProgressSort[] = ["pct", "streak", "name"];
+            setProgressSort(order[(order.indexOf(progressSort) + 1) % order.length]);
+          }}
+          className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground active:scale-95"
+        >
+          <ArrowUpDown className="size-3" />
+          {sortLabels[progressSort]}
+        </button>
+      </div>
+
+      {/* Range pills */}
+      <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-1">
+        {(["7d", "30d", "all"] as ProgressRange[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => setProgressRange(r)}
+            className="flex-1 rounded-lg py-1.5 text-xs font-medium transition-all active:scale-95"
+            style={
+              progressRange === r
+                ? { background: "var(--color-primary)", color: "var(--color-primary-foreground)" }
+                : { color: "var(--color-muted-foreground)" }
+            }
+          >
+            {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "All Time"}
+          </button>
+        ))}
+      </div>
+
+      {/* KPI 2×2 grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          {
+            label: "Tracked",
+            value: stats.total.toString(),
+            hint: "all time",
+            icon: <LayoutGrid className="size-4" />,
+            accent: false,
+            delta: 0,
+          },
+          {
+            label: "In motion",
+            value: stats.active.toString(),
+            hint: "active now",
+            icon: <Zap className="size-4" />,
+            accent: true,
+            delta: 0,
+          },
+          {
+            label: "Completion",
+            value: `${overallPct}%`,
+            hint:
+              showDelta && delta !== 0 ? `${delta > 0 ? "+" : ""}${delta}% vs prev` : "this period",
+            icon: <Activity className="size-4" />,
+            accent: false,
+            delta: showDelta ? delta : 0,
+          },
+          {
+            label: "Best streak",
+            value: `${personalRecords.longestEver}d`,
+            hint: "longest run",
+            icon: <Trophy className="size-4" />,
+            accent: true,
+            delta: 0,
+          },
+        ].map((k) => (
+          <div
+            key={k.label}
+            className="relative overflow-hidden rounded-2xl border border-border bg-card p-4"
+            style={{ boxShadow: "var(--shadow-soft)" }}
+          >
+            {k.accent && (
+              <div
+                className="pointer-events-none absolute inset-0 opacity-[0.07]"
+                style={{
+                  background:
+                    "radial-gradient(circle at top right, var(--color-primary) 0%, transparent 70%)",
+                }}
+              />
+            )}
+            <div className="flex items-center justify-between">
+              <div
+                style={{
+                  color: k.accent ? "var(--color-primary)" : "var(--color-muted-foreground)",
+                }}
+              >
+                {k.icon}
+              </div>
+              {k.delta !== 0 && (
+                <span
+                  className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[8px]"
+                  style={{
+                    background:
+                      k.delta > 0 ? "oklch(0.62 0.16 158 / 0.15)" : "oklch(0.55 0.2 25 / 0.15)",
+                    color: k.delta > 0 ? "#20A973" : "#E48068",
+                  }}
+                >
+                  {k.delta > 0 ? (
+                    <TrendingUp className="size-2.5" />
+                  ) : (
+                    <TrendingDown className="size-2.5" />
+                  )}
+                  {k.delta > 0 ? "+" : ""}
+                  {k.delta}%
+                </span>
+              )}
+            </div>
+            <div
+              className="mt-2 font-display text-3xl leading-none"
+              style={k.accent ? { color: "var(--color-primary)" } : undefined}
+            >
+              {k.value}
+            </div>
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              {k.label}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{k.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Consistency Score */}
+      <div
+        className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <svg width={72} height={72} viewBox="0 0 88 88" className="shrink-0">
+          <circle cx="44" cy="44" r={36} fill="none" stroke="oklch(1 0 0 / 0.06)" strokeWidth={7} />
+          <circle
+            cx="44"
+            cy="44"
+            r={36}
+            fill="none"
+            stroke={scoreColor}
+            strokeWidth={7}
+            strokeLinecap="round"
+            strokeDasharray={2 * Math.PI * 36}
+            strokeDashoffset={2 * Math.PI * 36 * (1 - consistencyScore / 100)}
+            transform="rotate(-90 44 44)"
+            style={{ transition: "stroke-dashoffset 0.8s ease" }}
+          />
+          <text
+            x="44"
+            y="50"
+            textAnchor="middle"
+            fill="white"
+            fontSize="17"
+            fontFamily="var(--font-display)"
+            fontWeight="700"
+          >
+            {consistencyScore}
+          </text>
+        </svg>
+        <div className="flex-1">
+          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Consistency Score
+          </div>
+          <div className="mt-0.5 font-display text-2xl leading-none" style={{ color: scoreColor }}>
+            {scoreTier}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">Completion · Streak · Recency</div>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div
+        className="rounded-2xl border border-border bg-card p-4"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              {progressRange === "7d"
+                ? "Last 7 days"
+                : progressRange === "30d"
+                  ? "Last 30 days"
+                  : "All time"}
+            </div>
+            <h3 className="mt-0.5 font-display text-lg text-foreground">Completion rhythm</h3>
+          </div>
+          <div className="text-right">
+            <div
+              className="font-display text-2xl leading-none"
+              style={{ color: "var(--color-primary)" }}
+            >
+              {overallPct}%
+            </div>
+            <div className="font-mono text-[9px] text-muted-foreground">
+              {totalDone}/{totalPossible}
+            </div>
+          </div>
+        </div>
+        {chartData.length === 0 ? (
+          <div className="flex h-28 items-center justify-center text-xs text-muted-foreground">
+            No data for this range
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={120}>
+            <BarChart
+              data={chartData}
+              barCategoryGap={chartData.length > 20 ? "10%" : "22%"}
+              margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
+            >
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "oklch(0.55 0.01 240)", fontSize: 8, fontFamily: "monospace" }}
+                interval={chartData.length > 15 ? "preserveStartEnd" : 0}
+              />
+              <YAxis hide domain={[0, 100]} />
+              <Tooltip
+                cursor={{ fill: "oklch(1 0 0 / 0.03)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload as {
+                    done: number;
+                    total: number;
+                    ratio: number;
+                    key: string;
+                  };
+                  return (
+                    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg">
+                      <div className="font-mono text-muted-foreground">{d.key}</div>
+                      <div className="font-medium text-foreground">
+                        {d.done}/{d.total} · {d.ratio}%
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="ratio" radius={[3, 3, 0, 0]} maxBarSize={32}>
+                {chartData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={
+                      i === chartData.length - 1
+                        ? "var(--color-primary)"
+                        : entry.ratio >= 80
+                          ? "oklch(0.62 0.16 158 / 0.6)"
+                          : entry.ratio >= 50
+                            ? "oklch(1 0 0 / 0.18)"
+                            : "oklch(1 0 0 / 0.07)"
+                    }
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Day-of-week analysis */}
+      <div
+        className="rounded-2xl border border-border bg-card p-4"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="mb-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Patterns
+          </div>
+          <h3 className="mt-0.5 font-display text-lg text-foreground">Best days of week</h3>
+          {bestDay.total > 0 && (
+            <div className="mt-0.5 font-mono text-[9px]" style={{ color: "var(--color-primary)" }}>
+              Peak: {bestDay.label} at {bestDay.pct}%
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          {weekdayStats.map((d) => {
+            const isBest = d.total > 0 && d.pct === bestDay.pct && bestDay.total > 0;
+            return (
+              <div key={d.day} className="flex items-center gap-3">
+                <div className="w-7 shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {d.label}
+                </div>
+                <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: d.total === 0 ? "0%" : `${d.pct}%`,
+                      background: isBest ? "var(--color-primary)" : "oklch(1 0 0 / 0.22)",
+                    }}
+                  />
+                </div>
+                <div
+                  className="w-9 shrink-0 text-right font-mono text-[10px]"
+                  style={{
+                    color: isBest ? "var(--color-primary)" : "var(--color-muted-foreground)",
+                  }}
+                >
+                  {d.total === 0 ? "—" : `${d.pct}%`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Personal Records */}
+      <div
+        className="rounded-2xl border border-border bg-card p-4"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <Award className="size-3.5 text-muted-foreground" />
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Personal records
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              {
+                label: "Longest streak",
+                value: personalRecords.longestEver > 0 ? `${personalRecords.longestEver}d` : "—",
+                icon: <Flame className="size-3.5" />,
+                accent: true,
+              },
+              {
+                label: "Best single day",
+                value: personalRecords.bestDayCount > 0 ? `${personalRecords.bestDayCount}` : "—",
+                icon: <CalendarCheck className="size-3.5" />,
+                accent: false,
+              },
+              {
+                label: "Best week",
+                value: personalRecords.bestWeekPct > 0 ? `${personalRecords.bestWeekPct}%` : "—",
+                icon: <TrendingUp className="size-3.5" />,
+                accent: false,
+              },
+            ] as const
+          ).map((r) => (
+            <div
+              key={r.label}
+              className="flex flex-col items-center rounded-xl border border-border p-3 text-center"
+              style={{ background: r.accent ? "var(--color-primary)" : "oklch(1 0 0 / 0.03)" }}
+            >
+              <div style={{ color: r.accent ? "white" : "var(--color-muted-foreground)" }}>
+                {r.icon}
+              </div>
+              <div
+                className="mt-1.5 font-display text-xl leading-none"
+                style={{ color: r.accent ? "white" : "var(--color-foreground)" }}
+              >
+                {r.value}
+              </div>
+              <div
+                className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.1em]"
+                style={{
+                  color: r.accent ? "rgba(255,255,255,0.7)" : "var(--color-muted-foreground)",
+                }}
+              >
+                {r.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 30-day heatmap */}
+      <div
+        className="rounded-2xl border border-border bg-card p-4"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Heatmap
+            </div>
+            <h3 className="mt-0.5 font-display text-lg text-foreground">Last 30 days</h3>
+          </div>
+          <div className="flex items-center gap-1">
+            {[0.08, 0.3, 0.6, 1].map((o) => (
+              <span
+                key={o}
+                className="size-3 rounded-sm"
+                style={{ background: "var(--color-primary)", opacity: o }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {rollup30.map((d, i) => {
+            const ratio = d.total ? d.done / d.total : 0;
+            return (
+              <div
+                key={d.key}
+                className="size-[18px] rounded-sm"
+                title={`${d.key}: ${d.done}/${d.total}`}
+                style={{
+                  background: d.total === 0 ? "oklch(1 0 0 / 0.04)" : "var(--color-primary)",
+                  opacity: d.total === 0 ? 1 : Math.max(0.08, ratio),
+                  outline: i === rollup30.length - 1 ? "1.5px solid var(--color-primary)" : "none",
+                  outlineOffset: 1,
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Status breakdown */}
+      {habits.length > 0 && (
+        <div
+          className="rounded-2xl border border-border bg-card p-4"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Status breakdown
+          </div>
+          {(["ongoing", "upcoming", "finished", "pending"] as const).map((k) => {
+            const statusColors = {
+              ongoing: "#20A973",
+              upcoming: "#5DA9E9",
+              finished: "#7F52E0",
+              pending: "#E48068",
+            };
+            const statusLabels = {
+              ongoing: "In motion",
+              upcoming: "Upcoming",
+              finished: "Completed",
+              pending: "Lapsed",
+            };
+            const count = counts[k];
+            const total = Object.values(counts).reduce((a, v) => a + v, 0);
+            const pct = total > 0 ? (count / total) * 100 : 0;
+            return (
+              <div key={k} className="mb-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="font-mono text-[9px] text-muted-foreground">
+                    {statusLabels[k]}
+                  </span>
+                  <span className="font-mono text-[9px] text-foreground">{count}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${pct}%`, background: statusColors[k] }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Per-habit breakdown */}
+      {habits.length > 0 && (
+        <div
+          className="rounded-2xl border border-border bg-card overflow-hidden"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Habit breakdown
+            </div>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {habits.length} total
+            </span>
+          </div>
+          <div className="divide-y divide-[oklch(1_0_0_/_0.05)]">
+            {sortedExtended.map((item, i) => {
+              const { habit: h, longestStreak, done, total, pct, currentStreak } = item;
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => setOpenId(h.id)}
+                  className="group flex w-full items-center gap-3 px-4 py-3 text-left active:bg-[oklch(1_0_0_/_0.03)]"
+                >
+                  <div
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md font-mono text-[9px] font-bold text-white"
+                    style={{ background: h.color }}
+                  >
+                    {i + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <HabitIcon
+                          name={h.icon}
+                          className="size-3 shrink-0"
+                          style={{ color: h.color }}
+                        />
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {h.name}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {currentStreak > 0 && (
+                          <span
+                            className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[9px]"
+                            style={{ background: `${h.color}20`, color: h.color }}
+                          >
+                            <Flame className="size-2.5" />
+                            {currentStreak}d
+                          </span>
+                        )}
+                        <span
+                          className="font-mono text-xs font-semibold"
+                          style={{ color: h.color }}
+                        >
+                          {Math.round(pct * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${pct * 100}%`, background: h.color }}
+                        />
+                      </div>
+                      <span className="shrink-0 font-mono text-[9px] text-muted-foreground">
+                        {done}/{total}
+                      </span>
+                      {longestStreak > 0 && (
+                        <span className="shrink-0 font-mono text-[9px] text-muted-foreground">
+                          best {longestStreak}d
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-active:opacity-100" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
