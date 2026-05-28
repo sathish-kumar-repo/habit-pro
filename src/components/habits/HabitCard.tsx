@@ -181,7 +181,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
 
       {/* Main card — slides left to reveal tray */}
       <article
-        className="relative border bg-card"
+        className="relative flex min-h-[320px] flex-col border bg-card"
         style={{
           transform: `translateX(${translateX}px)`,
           transition: dragging.current
@@ -202,7 +202,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
           style={{ background: `linear-gradient(180deg, ${habit.color}, transparent 80%)` }}
         />
 
-        <div className="p-5">
+        <div className="flex flex-1 flex-col p-5">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3">
             <button onClick={handleCardTap} className="flex-1 text-left">
@@ -305,7 +305,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
           </div>
 
           {/* Footer row */}
-          <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="mt-auto flex items-center justify-between gap-3 pt-4">
             <div className="grid grid-cols-3 gap-3 font-mono text-xs">
               <Stat
                 label="Streak"
