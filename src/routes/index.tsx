@@ -31,10 +31,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Habito — Daily Habit Tracker" },
-      {
-        name: "description",
-        content: "A focused workspace for building, tracking, and analyzing daily habits.",
-      },
+      { name: "description", content: "Track your daily habits." },
     ],
   }),
   component: Index,
@@ -49,7 +46,8 @@ const FILTERS = [
 type FilterId = (typeof FILTERS)[number]["id"];
 type AppTab = "today" | "habits" | "progress";
 
-function Index() {
+/* ─── shared data hook ───────────────────────── */
+function useAppData() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [filter, setFilter] = useState<FilterId>("ongoing");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -57,16 +55,9 @@ function Index() {
   const [addOpen, setAddOpen] = useState(false);
   const [tab, setTab] = useState<AppTab>("today");
 
-  // Pull-to-refresh
-  const [pullY, setPullY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const pullStartY = useRef(0);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const PULL_THRESHOLD = 72;
-
   useEffect(() => {
-    const unsub = subscribeHabits(setHabits);
-    return () => unsub();
+    const u = subscribeHabits(setHabits);
+    return u;
   }, []);
 
   const counts = useMemo(() => {
@@ -82,8 +73,8 @@ function Index() {
     return habits
       .filter((h) => classify(h) === filter)
       .sort((a, b) => {
-        const ad = a.track[t]?.done ? 1 : 0;
-        const bd = b.track[t]?.done ? 1 : 0;
+        const ad = a.track[t]?.done ? 1 : 0,
+          bd = b.track[t]?.done ? 1 : 0;
         if (ad !== bd) return ad - bd;
         return b.createdAt - a.createdAt;
       });
@@ -92,13 +83,13 @@ function Index() {
   const stats = useMemo(() => {
     const t = today();
     const active = habits.filter((h) => classify(h) === "ongoing");
-    const doneToday = active.filter((h) => h.track[t]?.done).length;
+    const done = active.filter((h) => h.track[t]?.done).length;
     const avg =
       habits.length === 0
         ? 0
-        : Math.round((habits.reduce((acc, h) => acc + progress(h).pct, 0) / habits.length) * 100);
-    const bestStreak = habits.reduce((m, h) => Math.max(m, streak(h)), 0);
-    return { total: habits.length, active: active.length, doneToday, avg, bestStreak };
+        : Math.round((habits.reduce((a, h) => a + progress(h).pct, 0) / habits.length) * 100);
+    const best = habits.reduce((m, h) => Math.max(m, streak(h)), 0);
+    return { total: habits.length, active: active.length, doneToday: done, avg, bestStreak: best };
   }, [habits]);
 
   const rollup = useMemo(() => {
@@ -127,8 +118,8 @@ function Index() {
     return habits
       .filter((h) => classify(h) === "ongoing")
       .sort((a, b) => {
-        const ad = a.track[t]?.done ? 1 : 0;
-        const bd = b.track[t]?.done ? 1 : 0;
+        const ad = a.track[t]?.done ? 1 : 0,
+          bd = b.track[t]?.done ? 1 : 0;
         if (ad !== bd) return ad - bd;
         return b.createdAt - a.createdAt;
       });
@@ -143,17 +134,741 @@ function Index() {
     const h = habits.find((h) => h.id === id);
     if (h) void toggleHabitDay(h, day);
   };
-
   const openHabit = habits.find((h) => h.id === openId) ?? null;
   const editHabit = habits.find((h) => h.id === editId) ?? null;
 
-  // Progress ring
-  const r = 44;
-  const circ = 2 * Math.PI * r;
-  const todayPct = stats.active ? stats.doneToday / stats.active : 0;
-  const dashOff = circ * (1 - todayPct);
+  return {
+    habits,
+    filter,
+    setFilter,
+    openId,
+    setOpenId,
+    editId,
+    setEditId,
+    addOpen,
+    setAddOpen,
+    tab,
+    setTab,
+    counts,
+    filtered,
+    stats,
+    rollup,
+    todayHabits,
+    handleDelete,
+    toggleToday,
+    toggleDay,
+    openHabit,
+    editHabit,
+  };
+}
 
-  // Pull-to-refresh handlers (touch only)
+/* ─── root ───────────────────────────────────── */
+function Index() {
+  const data = useAppData();
+  return (
+    <>
+      {/* Desktop ≥ lg */}
+      <DesktopApp {...data} />
+      {/* Mobile / tablet < lg */}
+      <MobileApp {...data} />
+
+      {/* Shared drawers */}
+      <AddHabitDialog open={data.addOpen} onOpenChange={data.setAddOpen} />
+      <HabitDetailDialog
+        habit={data.openHabit}
+        onClose={() => data.setOpenId(null)}
+        onToggleDay={data.toggleDay}
+      />
+      <EditHabitDialog habit={data.editHabit} onClose={() => data.setEditId(null)} />
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   DESKTOP APP  — full sidebar nav + rich content panels
+══════════════════════════════════════════════════════ */
+type AppProps = ReturnType<typeof useAppData>;
+
+function DesktopApp(p: AppProps) {
+  const { stats, tab, setTab, addOpen, setAddOpen } = p;
+  const todayPct = stats.active ? stats.doneToday / stats.active : 0;
+  const r = 32,
+    circ = 2 * Math.PI * r,
+    dashOff = circ * (1 - todayPct);
+
+  const NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
+    { id: "today", icon: <CheckCircle2 className="size-5" />, label: "Today" },
+    { id: "habits", icon: <LayoutGrid className="size-5" />, label: "Habits" },
+    { id: "progress", icon: <BarChart3 className="size-5" />, label: "Progress" },
+  ];
+
+  return (
+    <div className="hidden h-screen overflow-hidden bg-background lg:flex">
+      {/* ── Left nav rail ── */}
+      <aside
+        className="flex h-full w-60 shrink-0 flex-col border-r border-border xl:w-64"
+        style={{ background: "oklch(0.158 0.008 240)" }}
+      >
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-5 pt-6 pb-5">
+          <div
+            className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"
+            style={{ boxShadow: "var(--shadow-glow)" }}
+          >
+            <span className="font-display text-lg leading-none">H</span>
+          </div>
+          <div>
+            <div className="font-display text-[17px] leading-none tracking-tight">Habito</div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+              daily · tracker
+            </div>
+          </div>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 space-y-0.5 px-3 pt-1">
+          {NAV.map((n) => {
+            const active = tab === n.id;
+            return (
+              <button
+                key={n.id}
+                onClick={() => setTab(n.id)}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-[oklch(1_0_0_/_0.04)]"
+                style={{
+                  background: active ? "oklch(1 0 0 / 0.06)" : undefined,
+                  color: active ? "var(--color-foreground)" : "var(--color-muted-foreground)",
+                }}
+              >
+                <span style={{ color: active ? "var(--color-primary)" : undefined }}>{n.icon}</span>
+                {n.label}
+                {/* badge on Today */}
+                {n.id === "today" && stats.active > stats.doneToday && stats.active > 0 && (
+                  <span
+                    className="ml-auto flex size-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                    style={{ background: "var(--color-primary)" }}
+                  >
+                    {stats.active - stats.doneToday}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Today mini ring + CTA */}
+        <div className="px-4 pb-6 pt-4 space-y-3">
+          {/* Progress ring card */}
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+              Today
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <svg width="72" height="72" viewBox="0 0 72 72" className="shrink-0">
+                <circle
+                  cx="36"
+                  cy="36"
+                  r={r}
+                  fill="none"
+                  strokeWidth="5"
+                  stroke="oklch(1 0 0 / 0.06)"
+                />
+                <circle
+                  cx="36"
+                  cy="36"
+                  r={r}
+                  fill="none"
+                  strokeWidth="5"
+                  stroke="var(--color-primary)"
+                  strokeDasharray={circ}
+                  strokeDashoffset={dashOff}
+                  strokeLinecap="round"
+                  transform="rotate(-90 36 36)"
+                  style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)" }}
+                />
+              </svg>
+              <div>
+                <div className="font-display text-3xl leading-none text-foreground">
+                  {stats.doneToday}
+                  <span className="text-base text-muted-foreground">/{stats.active}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {stats.active === 0
+                    ? "No active habits"
+                    : stats.doneToday === stats.active
+                      ? "All done! 🎉"
+                      : `${stats.active - stats.doneToday} remaining`}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Add button */}
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98]"
+            style={{ boxShadow: "var(--shadow-glow)" }}
+          >
+            <Plus className="size-4" /> New habit
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main content ── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top bar */}
+        <header
+          className="flex shrink-0 items-center justify-between px-8 py-4 xl:px-10"
+          style={{
+            background: "oklch(0.155 0.008 240 / 0.8)",
+            backdropFilter: "blur(12px)",
+            borderBottom: "1px solid oklch(1 0 0 / 0.07)",
+          }}
+        >
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+              {new Date().toLocaleDateString("en", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </div>
+            <h1 className="mt-0.5 font-display text-2xl leading-none text-foreground xl:text-3xl">
+              {{ today: "Today's Focus", habits: "My Habits", progress: "My Progress" }[tab]}
+            </h1>
+          </div>
+          {/* Quick stats row */}
+          <div className="hidden items-center gap-6 xl:flex">
+            <QuickStat
+              icon={<LayoutGrid className="size-3.5" />}
+              label="Total"
+              value={stats.total.toString()}
+            />
+            <QuickStat
+              icon={<Flame className="size-3.5" />}
+              label="Streak"
+              value={`${stats.bestStreak}d`}
+              accent
+            />
+            <QuickStat
+              icon={<TrendingUp className="size-3.5" />}
+              label="Avg"
+              value={`${stats.avg}%`}
+            />
+          </div>
+        </header>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 xl:px-10 xl:py-8">
+          {/* ─ TODAY ─ */}
+          {tab === "today" && <DesktopToday {...p} />}
+
+          {/* ─ HABITS ─ */}
+          {tab === "habits" && <DesktopHabits {...p} />}
+
+          {/* ─ PROGRESS ─ */}
+          {tab === "progress" && <DesktopProgress {...p} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Desktop Today ── */
+function DesktopToday({ stats, todayHabits, rollup, toggleToday, setAddOpen }: AppProps) {
+  const todayPct = stats.active ? stats.doneToday / stats.active : 0;
+  const r = 52,
+    circ = 2 * Math.PI * r,
+    dashOff = circ * (1 - todayPct);
+
+  return (
+    <div className="grid h-full gap-5 xl:grid-cols-[1fr_340px]">
+      {/* Left — check-off list */}
+      <div className="flex flex-col gap-5">
+        {/* Greeting */}
+        <div
+          className="rounded-2xl border border-border bg-card p-6"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+            {new Date().toLocaleDateString("en", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+          </div>
+          <h2 className="mt-1 font-display text-3xl text-foreground xl:text-4xl">
+            {stats.doneToday === stats.active && stats.active > 0
+              ? "All done today! 🎉"
+              : stats.active === 0
+                ? "Start your first habit"
+                : `${stats.active - stats.doneToday} habit${stats.active - stats.doneToday !== 1 ? "s" : ""} left today`}
+          </h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {stats.active > 0
+              ? `${stats.doneToday} of ${stats.active} completed`
+              : "Create a habit to start tracking your progress."}
+          </p>
+        </div>
+
+        {/* Habit checklist */}
+        <div className="flex flex-1 flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-xl text-foreground">Today's habits</h3>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {todayHabits.length} active
+            </span>
+          </div>
+          {todayHabits.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center">
+              <p className="font-display text-xl text-foreground">No active habits yet.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Create one to start tracking.</p>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+              >
+                <Plus className="size-4" /> New habit
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-2.5 xl:grid-cols-2">
+              {todayHabits.map((h) => {
+                const t = today(),
+                  done = h.track[t]?.done ?? false,
+                  inRange = h.track[t] !== undefined;
+                const { pct } = progress(h);
+                return (
+                  <button
+                    key={h.id}
+                    onClick={() => inRange && toggleToday(h.id)}
+                    disabled={!inRange}
+                    className="group flex items-center gap-3 rounded-2xl border p-4 text-left transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
+                    style={{
+                      borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
+                      background: done ? `${h.color}10` : "var(--color-card)",
+                      boxShadow: "var(--shadow-soft)",
+                    }}
+                  >
+                    <div className="shrink-0 transition-transform group-active:scale-110">
+                      {done ? (
+                        <CheckCircle2 className="size-6" style={{ color: h.color }} />
+                      ) : (
+                        <Circle className="size-6 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="truncate font-medium text-foreground"
+                        style={{
+                          textDecoration: done ? "line-through" : "none",
+                          opacity: done ? 0.5 : 1,
+                        }}
+                      >
+                        {h.name}
+                      </div>
+                      {h.description && (
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {h.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-xs tabular-nums" style={{ color: h.color }}>
+                        {Math.round(pct * 100)}%
+                      </div>
+                      <div className="mt-1 h-1 w-14 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.08)]">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct * 100}%`, background: h.color }}
+                        />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right — ring + weekly chart */}
+      <div className="flex flex-col gap-5">
+        {/* Big ring card */}
+        <div
+          className="rounded-2xl border border-border bg-card p-6"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Today's progress
+          </div>
+          <div className="my-5 flex justify-center">
+            <div className="relative">
+              <svg width="140" height="140" viewBox="0 0 140 140">
+                <circle
+                  cx="70"
+                  cy="70"
+                  r={r}
+                  fill="none"
+                  strokeWidth="8"
+                  stroke="oklch(1 0 0 / 0.06)"
+                />
+                <circle
+                  cx="70"
+                  cy="70"
+                  r={r}
+                  fill="none"
+                  strokeWidth="8"
+                  stroke="var(--color-primary)"
+                  strokeDasharray={circ}
+                  strokeDashoffset={dashOff}
+                  strokeLinecap="round"
+                  transform="rotate(-90 70 70)"
+                  style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)" }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="font-display text-4xl leading-none text-foreground">
+                  {stats.doneToday}
+                </span>
+                <span className="font-mono text-sm text-muted-foreground">/{stats.active}</span>
+                <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                  done
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
+            {[
+              { label: "Total", value: stats.total.toString() },
+              { label: "Avg", value: `${stats.avg}%` },
+              { label: "Streak", value: `${stats.bestStreak}d`, accent: true },
+            ].map((k) => (
+              <div key={k.label} className="text-center">
+                <div
+                  className="font-display text-xl leading-none"
+                  style={k.accent ? { color: "var(--color-primary)" } : undefined}
+                >
+                  {k.value}
+                </div>
+                <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {k.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Weekly chart */}
+        <div
+          className="flex-1 rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <div className="font-display text-lg text-foreground">This week</div>
+            <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+              <Calendar className="size-3.5" />
+              {rollup.reduce((a, x) => a + x.done, 0)}/{rollup.reduce((a, x) => a + x.total, 0)}
+            </div>
+          </div>
+          <div className="flex items-end gap-2">
+            {rollup.map((d, i) => {
+              const ratio = d.total ? d.done / d.total : 0;
+              const h = Math.max(6, ratio * 100);
+              const isToday = i === rollup.length - 1;
+              return (
+                <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
+                  <div className="font-mono text-[9px] tabular-nums text-muted-foreground">
+                    {d.done}
+                  </div>
+                  <div className="relative w-full" style={{ height: 100 }}>
+                    <div
+                      className="absolute inset-x-1 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
+                      style={{ height: "100%" }}
+                    />
+                    <div
+                      className="absolute inset-x-1 bottom-0 rounded-md transition-all"
+                      style={{
+                        height: h,
+                        background: isToday
+                          ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
+                          : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
+                      }}
+                    />
+                  </div>
+                  <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                    {d.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Desktop Habits ── */
+function DesktopHabits({
+  filter,
+  setFilter,
+  counts,
+  filtered,
+  toggleToday,
+  setOpenId,
+  setEditId,
+  handleDelete,
+  setAddOpen,
+}: AppProps) {
+  return (
+    <div className="space-y-5">
+      {/* Filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className="rounded-full border px-4 py-2 text-sm font-medium transition-all hover:brightness-110 active:scale-95"
+            style={
+              filter === f.id
+                ? {
+                    background: "var(--color-primary)",
+                    color: "var(--color-primary-foreground)",
+                    borderColor: "var(--color-primary)",
+                  }
+                : {
+                    borderColor: "oklch(1 0 0 / 0.08)",
+                    color: "var(--color-muted-foreground)",
+                    background: "var(--color-card)",
+                  }
+            }
+          >
+            {f.label} <span className="opacity-60">{counts[f.id]}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Section heading */}
+      <div className="flex items-baseline gap-3">
+        <h2 className="font-display text-2xl text-foreground">
+          {FILTERS.find((f) => f.id === filter)?.label}
+        </h2>
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
+        </span>
+      </div>
+
+      {/* Cards */}
+      {filtered.length === 0 ? (
+        <EmptyState filter={filter} />
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+          {filtered.map((h) => (
+            <HabitCard
+              key={h.id}
+              habit={h}
+              onToggleToday={toggleToday}
+              onOpen={setOpenId}
+              onEdit={setEditId}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Desktop Progress ── */
+function DesktopProgress({ stats, rollup, habits }: AppProps) {
+  return (
+    <div className="space-y-5">
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {[
+          {
+            label: "Habits tracked",
+            value: stats.total.toString(),
+            hint: "all time",
+            icon: <LayoutGrid className="size-4" />,
+          },
+          {
+            label: "In motion",
+            value: stats.active.toString(),
+            hint: "right now",
+            icon: <Flame className="size-4" />,
+            accent: true,
+          },
+          {
+            label: "Avg progress",
+            value: `${stats.avg}%`,
+            hint: "all habits",
+            icon: <TrendingUp className="size-4" />,
+          },
+          {
+            label: "Best streak",
+            value: `${stats.bestStreak}d`,
+            hint: "longest run",
+            icon: <Flame className="size-4" />,
+            accent: true,
+          },
+        ].map((k) => (
+          <div
+            key={k.label}
+            className="rounded-2xl border border-border bg-card p-5"
+            style={{ boxShadow: "var(--shadow-soft)" }}
+          >
+            <div className="text-muted-foreground">{k.icon}</div>
+            <div
+              className="mt-3 font-display text-4xl leading-none xl:text-5xl"
+              style={k.accent ? { color: "var(--color-primary)" } : undefined}
+            >
+              {k.value}
+            </div>
+            <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              {k.label}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{k.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+        {/* Weekly chart */}
+        <div
+          className="rounded-2xl border border-border bg-card p-6"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Last 7 days
+              </div>
+              <h3 className="mt-0.5 font-display text-2xl text-foreground">Weekly rhythm</h3>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-3xl" style={{ color: "var(--color-primary)" }}>
+                {rollup.reduce((a, x) => a + x.done, 0)}
+              </div>
+              <div className="font-mono text-[10px] text-muted-foreground">
+                / {rollup.reduce((a, x) => a + x.total, 0)} done
+              </div>
+            </div>
+          </div>
+          <div className="flex items-end gap-3">
+            {rollup.map((d, i) => {
+              const ratio = d.total ? d.done / d.total : 0;
+              const h = Math.max(8, ratio * 140);
+              const isToday = i === rollup.length - 1;
+              return (
+                <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
+                  <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {d.done}/{d.total}
+                  </div>
+                  <div className="relative w-full" style={{ height: 140 }}>
+                    <div
+                      className="absolute inset-x-2 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
+                      style={{ height: "100%" }}
+                    />
+                    <div
+                      className="absolute inset-x-2 bottom-0 rounded-md transition-all"
+                      style={{
+                        height: h,
+                        background: isToday
+                          ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
+                          : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.06))",
+                      }}
+                    />
+                  </div>
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {d.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Per-habit breakdown */}
+        <div
+          className="rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            All habits
+          </div>
+          {habits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No habits yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {habits.map((h) => {
+                const { done, total, pct } = progress(h);
+                const s = streak(h);
+                return (
+                  <div key={h.id}>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ background: h.color }}
+                        />
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {h.name}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground">
+                        <span>
+                          {done}/{total}
+                        </span>
+                        {s > 0 && <span style={{ color: h.color }}>{s}d 🔥</span>}
+                        <span className="font-semibold" style={{ color: h.color }}>
+                          {Math.round(pct * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.06)]">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${pct * 100}%`, background: h.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   MOBILE / TABLET  < lg
+══════════════════════════════════════════════════════ */
+function MobileApp(p: AppProps) {
+  const {
+    tab,
+    setTab,
+    setAddOpen,
+    stats,
+    filter,
+    setFilter,
+    counts,
+    filtered,
+    todayHabits,
+    rollup,
+    toggleToday,
+    setOpenId,
+    setEditId,
+    handleDelete,
+  } = p;
+
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const PULL_THRESHOLD = 72;
+
   const onTouchStart = (e: React.TouchEvent) => {
     if (!contentRef.current || contentRef.current.scrollTop > 0) return;
     pullStartY.current = e.touches[0].clientY;
@@ -175,11 +890,16 @@ function Index() {
     }
   };
 
+  const r = 38,
+    circ = 2 * Math.PI * r;
+  const todayPct = stats.active ? stats.doneToday / stats.active : 0;
+  const dashOff = circ * (1 - todayPct);
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* ── STICKY HEADER ── */}
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-background lg:hidden">
+      {/* Header */}
       <header
-        className="z-30 flex shrink-0 items-center justify-between px-5 py-3"
+        className="sticky top-0 z-30 flex shrink-0 items-center justify-between px-5 py-3"
         style={{
           paddingTop: "max(0.75rem, env(safe-area-inset-top))",
           background: "oklch(0.155 0.008 240 / 0.88)",
@@ -188,7 +908,7 @@ function Index() {
           borderBottom: "1px solid oklch(1 0 0 / 0.07)",
         }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div
             className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground"
             style={{ boxShadow: "var(--shadow-glow)" }}
@@ -196,8 +916,8 @@ function Index() {
             <span className="font-display text-lg leading-none">H</span>
           </div>
           <div>
-            <div className="font-display text-[18px] leading-none tracking-tight">Habito</div>
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="font-display text-[17px] leading-none tracking-tight">Habito</div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
               {new Date().toLocaleDateString("en", {
                 weekday: "short",
                 month: "short",
@@ -206,21 +926,17 @@ function Index() {
             </div>
           </div>
         </div>
-
-        {/* Header action button when not on Today tab */}
         {tab !== "today" && (
           <button
             onClick={() => setAddOpen(true)}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
-            style={{ boxShadow: "var(--shadow-glow)" }}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-all active:scale-95"
           >
-            <Plus className="size-4" />
-            New habit
+            <Plus className="size-3.5" /> New
           </button>
         )}
       </header>
 
-      {/* ── PULL-TO-REFRESH STRIP ── */}
+      {/* Pull-to-refresh */}
       <div
         className="flex shrink-0 items-center justify-center overflow-hidden transition-all duration-200"
         style={{ height: pullY > 0 ? `${pullY}px` : refreshing ? "44px" : "0px" }}
@@ -241,7 +957,7 @@ function Index() {
         </div>
       </div>
 
-      {/* ── SCROLLABLE CONTENT ── */}
+      {/* Content */}
       <div
         ref={contentRef}
         className="flex-1 overflow-y-auto"
@@ -250,11 +966,10 @@ function Index() {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
-          {/* ════ TODAY TAB ════ */}
+        <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
+          {/* TODAY */}
           {tab === "today" && (
-            <div className="pt-5 pb-6 space-y-4">
-              {/* Date + greeting */}
+            <div className="space-y-4 pb-6 pt-5">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                   {new Date().toLocaleDateString("en", {
@@ -263,7 +978,7 @@ function Index() {
                     day: "numeric",
                   })}
                 </div>
-                <h1 className="mt-1 font-display text-3xl leading-tight text-foreground sm:text-4xl">
+                <h1 className="mt-1 font-display text-3xl leading-tight text-foreground">
                   {stats.doneToday === stats.active && stats.active > 0
                     ? "All done today! 🎉"
                     : stats.active === 0
@@ -271,92 +986,84 @@ function Index() {
                       : `${stats.active - stats.doneToday} habit${stats.active - stats.doneToday !== 1 ? "s" : ""} left today`}
                 </h1>
               </div>
-
-              {/* Progress ring + stats — wider on desktop */}
+              {/* Ring */}
               <div
-                className="flex items-center gap-5 rounded-2xl border border-border bg-card p-5 sm:gap-8 sm:p-6"
+                className="flex items-center gap-5 rounded-2xl border border-border bg-card p-4"
                 style={{ boxShadow: "var(--shadow-soft)" }}
               >
-                {/* Ring */}
                 <div className="relative shrink-0">
-                  <svg width="108" height="108" viewBox="0 0 108 108">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
                     <circle
-                      cx="54"
-                      cy="54"
+                      cx="48"
+                      cy="48"
                       r={r}
                       fill="none"
-                      strokeWidth="7"
+                      strokeWidth="6"
                       stroke="oklch(1 0 0 / 0.06)"
                     />
                     <circle
-                      cx="54"
-                      cy="54"
+                      cx="48"
+                      cy="48"
                       r={r}
                       fill="none"
-                      strokeWidth="7"
+                      strokeWidth="6"
                       stroke="var(--color-primary)"
                       strokeDasharray={circ}
                       strokeDashoffset={dashOff}
                       strokeLinecap="round"
-                      transform="rotate(-90 54 54)"
+                      transform="rotate(-90 48 48)"
                       style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)" }}
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="font-display text-3xl leading-none text-foreground">
+                    <span className="font-display text-2xl leading-none text-foreground">
                       {stats.doneToday}
                     </span>
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono text-[10px] text-muted-foreground">
                       /{stats.active}
                     </span>
                   </div>
                 </div>
-
-                {/* Mini stats */}
-                <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3">
+                <div className="flex flex-1 flex-col gap-3">
                   <MiniStat label="Total habits" value={stats.total.toString()} />
                   <MiniStat label="Avg progress" value={`${stats.avg}%`} />
                   <MiniStat label="Best streak" value={`${stats.bestStreak}d`} highlight />
                 </div>
               </div>
-
-              {/* Today's check-off list */}
+              {/* Check-off */}
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-display text-xl text-foreground sm:text-2xl">
-                    Today's habits
-                  </h2>
+                  <h2 className="font-display text-xl text-foreground">Today's habits</h2>
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     {todayHabits.length} active
                   </span>
                 </div>
-
                 {todayHabits.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-12 text-center">
-                    <p className="font-display text-xl text-foreground">No active habits yet.</p>
+                  <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
+                    <p className="font-display text-lg text-foreground">No active habits yet.</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Create one to start tracking.
+                      Start one to begin tracking.
                     </p>
                     <button
                       onClick={() => setAddOpen(true)}
-                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all active:scale-95"
                     >
                       <Plus className="size-4" /> New habit
                     </button>
                   </div>
                 ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-2">
                     {todayHabits.map((h) => {
-                      const t = today();
-                      const done = h.track[t]?.done ?? false;
-                      const inRange = h.track[t] !== undefined;
+                      const t = today(),
+                        done = h.track[t]?.done ?? false,
+                        inRange = h.track[t] !== undefined;
                       const { pct } = progress(h);
                       return (
                         <button
                           key={h.id}
                           onClick={() => inRange && toggleToday(h.id)}
                           disabled={!inRange}
-                          className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
+                          className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] disabled:opacity-50"
                           style={{
                             borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
                             background: done ? `${h.color}12` : "var(--color-card)",
@@ -406,28 +1113,26 @@ function Index() {
                   </div>
                 )}
               </div>
-
               {/* Weekly mini chart */}
               <div
-                className="rounded-2xl border border-border bg-card p-5"
+                className="rounded-2xl border border-border bg-card p-4"
                 style={{ boxShadow: "var(--shadow-soft)" }}
               >
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-display text-lg text-foreground sm:text-xl">This week</h3>
-                  <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                    <Calendar className="size-3.5" />
-                    {rollup.reduce((a, x) => a + x.done, 0)}&nbsp;/&nbsp;
+                  <h3 className="font-display text-lg text-foreground">This week</h3>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {rollup.reduce((a, x) => a + x.done, 0)}/
                     {rollup.reduce((a, x) => a + x.total, 0)}
-                  </div>
+                  </span>
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="flex items-end gap-1.5">
                   {rollup.map((d, i) => {
-                    const ratio = d.total ? d.done / d.total : 0;
-                    const h = Math.max(6, ratio * 72);
-                    const isToday = i === rollup.length - 1;
+                    const ratio = d.total ? d.done / d.total : 0,
+                      h = Math.max(6, ratio * 64),
+                      isToday = i === rollup.length - 1;
                     return (
                       <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
-                        <div className="relative w-full" style={{ height: 72 }}>
+                        <div className="relative w-full" style={{ height: 64 }}>
                           <div
                             className="absolute inset-x-1 bottom-0 rounded-sm bg-[oklch(1_0_0_/_0.04)]"
                             style={{ height: "100%" }}
@@ -453,16 +1158,15 @@ function Index() {
             </div>
           )}
 
-          {/* ════ HABITS TAB ════ */}
+          {/* HABITS */}
           {tab === "habits" && (
-            <div className="pt-5 pb-6 space-y-4">
-              {/* Filter pills */}
+            <div className="space-y-4 pb-6 pt-5">
               <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
                 {FILTERS.map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setFilter(f.id)}
-                    className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all hover:brightness-110 active:scale-95"
+                    className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all active:scale-95"
                     style={
                       filter === f.id
                         ? {
@@ -481,20 +1185,18 @@ function Index() {
                   </button>
                 ))}
               </div>
-
               <div>
-                <h2 className="font-display text-2xl text-foreground sm:text-3xl">
+                <h2 className="font-display text-2xl text-foreground">
                   {FILTERS.find((f) => f.id === filter)?.label}
                 </h2>
                 <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                   {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
                 </div>
               </div>
-
               {filtered.length === 0 ? (
                 <EmptyState filter={filter} />
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-3">
                   {filtered.map((h) => (
                     <HabitCard
                       key={h.id}
@@ -510,13 +1212,11 @@ function Index() {
             </div>
           )}
 
-          {/* ════ PROGRESS TAB ════ */}
+          {/* PROGRESS */}
           {tab === "progress" && (
-            <div className="pt-5 pb-6 space-y-4">
-              <h2 className="font-display text-2xl text-foreground sm:text-3xl">Progress</h2>
-
-              {/* KPI grid */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="space-y-4 pb-6 pt-5">
+              <h2 className="font-display text-2xl text-foreground">Progress</h2>
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   {
                     label: "Tracked",
@@ -547,12 +1247,12 @@ function Index() {
                 ].map((k) => (
                   <div
                     key={k.label}
-                    className="rounded-2xl border border-border bg-card p-4 sm:p-5"
+                    className="rounded-2xl border border-border bg-card p-4"
                     style={{ boxShadow: "var(--shadow-soft)" }}
                   >
                     <div className="text-muted-foreground">{k.icon}</div>
                     <div
-                      className="mt-2 font-display text-3xl leading-none sm:text-4xl"
+                      className="mt-2 font-display text-3xl leading-none"
                       style={k.accent ? { color: "var(--color-primary)" } : undefined}
                     >
                       {k.value}
@@ -564,20 +1264,16 @@ function Index() {
                   </div>
                 ))}
               </div>
-
-              {/* Weekly bar chart */}
               <div
-                className="rounded-2xl border border-border bg-card p-5 sm:p-6"
+                className="rounded-2xl border border-border bg-card p-5"
                 style={{ boxShadow: "var(--shadow-soft)" }}
               >
-                <div className="mb-5 flex items-center justify-between">
+                <div className="mb-4 flex items-center justify-between">
                   <div>
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                       Last 7 days
                     </div>
-                    <h3 className="mt-0.5 font-display text-xl text-foreground sm:text-2xl">
-                      Weekly rhythm
-                    </h3>
+                    <h3 className="mt-0.5 font-display text-xl text-foreground">Weekly rhythm</h3>
                   </div>
                   <div className="text-right">
                     <div
@@ -591,17 +1287,17 @@ function Index() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-end gap-2 sm:gap-3">
+                <div className="flex items-end gap-2">
                   {rollup.map((d, i) => {
-                    const ratio = d.total ? d.done / d.total : 0;
-                    const h = Math.max(8, ratio * 120);
-                    const isToday = i === rollup.length - 1;
+                    const ratio = d.total ? d.done / d.total : 0,
+                      h = Math.max(8, ratio * 100),
+                      isToday = i === rollup.length - 1;
                     return (
-                      <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
+                      <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
                         <div className="font-mono text-[9px] tabular-nums text-muted-foreground">
                           {d.done}
                         </div>
-                        <div className="relative w-full" style={{ height: 120 }}>
+                        <div className="relative w-full" style={{ height: 100 }}>
                           <div
                             className="absolute inset-x-1 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
                             style={{ height: "100%" }}
@@ -624,18 +1320,16 @@ function Index() {
                   })}
                 </div>
               </div>
-
-              {/* Per-habit progress bars */}
-              {habits.length > 0 && (
+              {p.habits.length > 0 && (
                 <div
-                  className="rounded-2xl border border-border bg-card p-5 sm:p-6"
+                  className="rounded-2xl border border-border bg-card p-5"
                   style={{ boxShadow: "var(--shadow-soft)" }}
                 >
                   <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                     All habits
                   </div>
                   <div className="space-y-4">
-                    {habits.map((h) => {
+                    {p.habits.map((h) => {
                       const { done, total, pct } = progress(h);
                       const s = streak(h);
                       return (
@@ -677,9 +1371,9 @@ function Index() {
         </div>
       </div>
 
-      {/* ── BOTTOM NAV ── */}
+      {/* Bottom nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40"
+        className="fixed inset-x-0 bottom-0 z-40 lg:hidden"
         style={{
           paddingBottom: "env(safe-area-inset-bottom)",
           background: "oklch(0.165 0.008 240 / 0.92)",
@@ -688,7 +1382,7 @@ function Index() {
           borderTop: "1px solid oklch(1 0 0 / 0.08)",
         }}
       >
-        <div className="mx-auto flex max-w-4xl items-stretch">
+        <div className="mx-auto flex max-w-2xl items-stretch">
           {(
             [
               { id: "today" as AppTab, icon: <CheckCircle2 className="size-5" />, label: "Today" },
@@ -708,7 +1402,6 @@ function Index() {
                 className="relative flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-all active:scale-95"
                 style={{ color: active ? "var(--color-primary)" : "var(--color-muted-foreground)" }}
               >
-                {/* Badge on Today */}
                 <div className="relative">
                   {t.icon}
                   {t.id === "today" && stats.active > stats.doneToday && stats.active > 0 && (
@@ -721,7 +1414,6 @@ function Index() {
                   )}
                 </div>
                 <span className="text-[11px] font-medium tracking-wide">{t.label}</span>
-                {/* Active indicator */}
                 {active && (
                   <span
                     className="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full"
@@ -734,16 +1426,16 @@ function Index() {
         </div>
       </nav>
 
-      {/* ── FAB ── */}
+      {/* FAB */}
       {tab === "today" && (
         <button
           onClick={() => setAddOpen(true)}
-          className="fixed z-50 flex items-center justify-center rounded-full transition-all hover:scale-105 hover:brightness-110 active:scale-90"
+          className="fixed z-50 flex items-center justify-center rounded-full transition-all active:scale-90 lg:hidden"
           style={{
             right: "max(1.25rem, env(safe-area-inset-right))",
             bottom: "calc(4.75rem + env(safe-area-inset-bottom))",
-            width: 60,
-            height: 60,
+            width: 56,
+            height: 56,
             background: "var(--color-primary)",
             color: "var(--color-primary-foreground)",
             boxShadow: "var(--shadow-glow)",
@@ -752,21 +1444,39 @@ function Index() {
           <Plus className="size-6" />
         </button>
       )}
-
-      {/* ── SHARED DIALOGS ── */}
-      <AddHabitDialog open={addOpen} onOpenChange={setAddOpen} />
-      <HabitDetailDialog
-        habit={openHabit}
-        onClose={() => setOpenId(null)}
-        onToggleDay={toggleDay}
-      />
-      <EditHabitDialog habit={editHabit} onClose={() => setEditId(null)} />
     </div>
   );
 }
 
-/* ── helpers ── */
-
+/* ─── tiny helpers ─── */
+function QuickStat({
+  icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-muted-foreground">{icon}</span>
+      <div>
+        <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </div>
+        <div
+          className="font-display text-lg leading-none"
+          style={accent ? { color: "var(--color-primary)" } : undefined}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
 function MiniStat({
   label,
   value,
@@ -782,7 +1492,7 @@ function MiniStat({
         {label}
       </div>
       <div
-        className="mt-0.5 font-display text-xl leading-none sm:text-2xl"
+        className="mt-0.5 font-display text-xl leading-none"
         style={highlight ? { color: "var(--color-primary)" } : undefined}
       >
         {value}
@@ -790,7 +1500,6 @@ function MiniStat({
     </div>
   );
 }
-
 function EmptyState({ filter }: { filter: FilterId }) {
   const copy: Record<FilterId, string> = {
     ongoing: "No habits in motion. Start one and let momentum take care of the rest.",
@@ -803,7 +1512,7 @@ function EmptyState({ filter }: { filter: FilterId }) {
       <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
         Empty
       </div>
-      <p className="mt-3 max-w-sm font-display text-xl leading-tight text-foreground sm:text-2xl">
+      <p className="mt-3 max-w-sm font-display text-xl leading-tight text-foreground">
         {copy[filter]}
       </p>
     </div>

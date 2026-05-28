@@ -6,6 +6,7 @@ import { Habit, COLORS, habitSchema, updateHabit } from "@/lib/habits";
 import { DatePickerWithPresets } from "./DatePickerWithPresets";
 import type { z } from "zod";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type FieldErrors = Partial<Record<keyof z.infer<typeof habitSchema>, string>>;
 
@@ -14,7 +15,22 @@ type Props = {
   onClose: () => void;
 };
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= 1024,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
+}
+
 export function EditHabitDialog({ habit, onClose }: Props) {
+  const isDesktop = useIsDesktop();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [plan, setPlan] = useState("");
@@ -61,21 +77,133 @@ export function EditHabitDialog({ habit, onClose }: Props) {
     }
   };
 
+  const formBody = (
+    <div className="space-y-4">
+      <Field label="Habit name" error={errors.name}>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Read 20 pages"
+          className={`h-11 rounded-xl text-base ${errors.name ? "border-destructive" : ""}`}
+        />
+      </Field>
+      <Field label="Why it matters" error={errors.description}>
+        <Input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="The reason behind it"
+          className={`h-11 rounded-xl text-base ${errors.description ? "border-destructive" : ""}`}
+        />
+      </Field>
+      <Field label="Plan" error={errors.plan}>
+        <Textarea
+          value={plan}
+          onChange={(e) => setPlan(e.target.value)}
+          placeholder="When, where, how"
+          rows={3}
+          className={`rounded-xl text-base ${errors.plan ? "border-destructive" : ""}`}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <DatePickerWithPresets
+          label="Start"
+          value={start}
+          onChange={setStart}
+          error={errors.start}
+        />
+        <DatePickerWithPresets
+          label="End"
+          value={end}
+          onChange={setEnd}
+          minDate={start}
+          error={errors.end}
+        />
+      </div>
+      <Field label="Color accent">
+        <div className="flex flex-wrap gap-3 pt-1">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => setColor(c)}
+              className="size-9 rounded-full transition-all active:scale-90"
+              style={{
+                background: c,
+                outline: color === c ? `3px solid ${c}` : "2px solid oklch(1 0 0 / 0.1)",
+                outlineOffset: color === c ? 3 : 0,
+              }}
+              aria-label={`Color ${c}`}
+            />
+          ))}
+        </div>
+      </Field>
+    </div>
+  );
+
+  const footer = (
+    <div className="flex gap-3">
+      <button
+        onClick={onClose}
+        className="flex-1 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-all hover:text-foreground active:scale-95"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={submit}
+        disabled={saving || !name.trim()}
+        className="flex-1 rounded-xl py-3 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-40"
+        style={{ background: color, boxShadow: `0 4px 20px ${color}50` }}
+      >
+        {saving ? "Saving…" : "Update"}
+      </button>
+    </div>
+  );
+
+  if (isDesktop) {
+    return (
+      <Dialog open={!!habit} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent
+          className="border-border bg-[oklch(0.185_0.008_240)] p-0 sm:max-w-lg focus:outline-none"
+          style={{ borderRadius: "1.25rem" }}
+        >
+          <div className="flex items-start justify-between border-b border-border px-6 py-5">
+            <div>
+              <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                <Pencil className="size-3" /> Edit commitment
+              </div>
+              <DialogTitle className="mt-1 font-display text-2xl leading-none text-foreground">
+                Refine the habit.
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                Adjust the intention, window, or plan.
+              </DialogDescription>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-full p-2 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: "calc(80dvh - 160px)" }}>
+            {formBody}
+          </div>
+          <div className="border-t border-border px-6 py-4">{footer}</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Drawer open={!!habit} onOpenChange={(o) => !o && onClose()} shouldScaleBackground={false}>
       <DrawerContent
         className="border-border bg-[oklch(0.185_0.008_240)] focus:outline-none"
         style={{ maxHeight: "92dvh" }}
       >
-        {/* Handle */}
         <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[oklch(1_0_0_/_0.15)]" />
-
-        {/* Header */}
         <div className="flex items-start justify-between px-5 pt-4 pb-3">
           <div>
             <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-              <Pencil className="size-3" />
-              Edit commitment
+              <Pencil className="size-3" /> Edit commitment
             </div>
             <DrawerTitle className="mt-1 font-display text-3xl leading-none text-foreground">
               Refine the habit.
@@ -91,93 +219,12 @@ export function EditHabitDialog({ habit, onClose }: Props) {
             <X className="size-4" />
           </button>
         </div>
-
-        {/* Scrollable form */}
-        <div className="flex-1 overflow-y-auto px-5 pb-3">
-          <div className="space-y-4 pb-6">
-            <Field label="Habit name" error={errors.name}>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Read 20 pages"
-                className={`h-12 rounded-xl text-base ${errors.name ? "border-destructive" : ""}`}
-              />
-            </Field>
-
-            <Field label="Why it matters" error={errors.description}>
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="The reason behind it"
-                className={`h-12 rounded-xl text-base ${errors.description ? "border-destructive" : ""}`}
-              />
-            </Field>
-
-            <Field label="Plan" error={errors.plan}>
-              <Textarea
-                value={plan}
-                onChange={(e) => setPlan(e.target.value)}
-                placeholder="When, where, how"
-                rows={3}
-                className={`rounded-xl text-base ${errors.plan ? "border-destructive" : ""}`}
-              />
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3">
-              <DatePickerWithPresets
-                label="Start"
-                value={start}
-                onChange={setStart}
-                error={errors.start}
-              />
-              <DatePickerWithPresets
-                label="End"
-                value={end}
-                onChange={setEnd}
-                minDate={start}
-                error={errors.end}
-              />
-            </div>
-
-            <Field label="Color accent">
-              <div className="flex flex-wrap gap-3 pt-1">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setColor(c)}
-                    className="size-9 rounded-full transition-all active:scale-90"
-                    style={{
-                      background: c,
-                      outline: color === c ? `3px solid ${c}` : "2px solid oklch(1 0 0 / 0.1)",
-                      outlineOffset: color === c ? 3 : 0,
-                    }}
-                    aria-label={`Color ${c}`}
-                  />
-                ))}
-              </div>
-            </Field>
-          </div>
-        </div>
-
-        {/* Sticky footer */}
+        <div className="flex-1 overflow-y-auto px-5 pb-3">{formBody}</div>
         <div
-          className="flex gap-3 border-t border-border px-5 py-4"
+          className="border-t border-border px-5 py-4"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-all hover:text-foreground active:scale-95"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving || !name.trim()}
-            className="flex-1 rounded-xl py-3 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: color, boxShadow: `0 4px 20px ${color}50` }}
-          >
-            {saving ? "Saving…" : "Update"}
-          </button>
+          {footer}
         </div>
       </DrawerContent>
     </Drawer>

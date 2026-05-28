@@ -220,8 +220,8 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
               )}
             </button>
 
-            {/* Desktop-only action buttons (hover) */}
-            <div className="hidden items-center gap-1 opacity-0 transition-all group-hover:opacity-100 focus-within:opacity-100 lg:flex">
+            {/* Desktop-only action buttons — always visible on lg+ */}
+            <div className="hidden items-center gap-1 lg:flex">
               <button
                 onClick={() => onEdit(habit.id)}
                 className="rounded-md p-1.5 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
