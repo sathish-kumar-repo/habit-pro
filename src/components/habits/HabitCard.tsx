@@ -275,18 +275,29 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
                   } else {
                     opacity = 0.5;
                   }
+                  const hasNote =
+                    cell.state !== "outside" &&
+                    cell.state !== "future" &&
+                    habit.track[cell.key]?.note?.trim();
                   return (
                     <span
                       key={cell.key}
-                      title={`${cell.key} · ${cell.state}`}
-                      className="size-2.5 rounded-[3px]"
+                      title={hasNote ? habit.track[cell.key].note : `${cell.key} · ${cell.state}`}
+                      className="relative size-2.5 rounded-[3px]"
                       style={{
                         background: bg,
                         opacity,
                         outline: isToday ? `1px solid ${habit.color}` : "none",
                         outlineOffset: 1,
                       }}
-                    />
+                    >
+                      {hasNote && (
+                        <span
+                          className="absolute -right-[2px] -top-[2px] size-1.5 rounded-full border border-[oklch(0.2_0.008_240)]"
+                          style={{ background: habit.color, opacity: 1 }}
+                        />
+                      )}
+                    </span>
                   );
                 })}
               </div>

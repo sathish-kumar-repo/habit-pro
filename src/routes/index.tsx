@@ -10,6 +10,7 @@ import {
   BarChart3,
   LayoutGrid,
   RefreshCw,
+  StickyNote,
 } from "lucide-react";
 import {
   Habit,
@@ -17,6 +18,7 @@ import {
   subscribeHabits,
   deleteHabit as deleteHabitFs,
   toggleHabitDay,
+  setHabitNote,
   today,
   progress,
   streak,
@@ -134,6 +136,10 @@ function useAppData() {
     const h = habits.find((h) => h.id === id);
     if (h) void toggleHabitDay(h, day);
   };
+  const saveNote = (id: string, note: string) => {
+    const h = habits.find((h) => h.id === id);
+    if (h) void setHabitNote(h, today(), note);
+  };
   const openHabit = habits.find((h) => h.id === openId) ?? null;
   const editHabit = habits.find((h) => h.id === editId) ?? null;
 
@@ -157,6 +163,7 @@ function useAppData() {
     handleDelete,
     toggleToday,
     toggleDay,
+    saveNote,
     openHabit,
     editHabit,
   };
@@ -374,7 +381,7 @@ function DesktopApp(p: AppProps) {
 }
 
 /* ── Desktop Today ── */
-function DesktopToday({ stats, todayHabits, rollup, toggleToday, setAddOpen }: AppProps) {
+function DesktopToday({ stats, todayHabits, rollup, toggleToday, saveNote, setAddOpen }: AppProps) {
   const todayPct = stats.active ? stats.doneToday / stats.active : 0;
   const r = 52,
     circ = 2 * Math.PI * r,
@@ -431,60 +438,9 @@ function DesktopToday({ stats, todayHabits, rollup, toggleToday, setAddOpen }: A
             </div>
           ) : (
             <div className="grid gap-2.5 xl:grid-cols-2">
-              {todayHabits.map((h) => {
-                const t = today(),
-                  done = h.track[t]?.done ?? false,
-                  inRange = h.track[t] !== undefined;
-                const { pct } = progress(h);
-                return (
-                  <button
-                    key={h.id}
-                    onClick={() => inRange && toggleToday(h.id)}
-                    disabled={!inRange}
-                    className="group flex items-center gap-3 rounded-2xl border p-4 text-left transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
-                    style={{
-                      borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
-                      background: done ? `${h.color}10` : "var(--color-card)",
-                      boxShadow: "var(--shadow-soft)",
-                    }}
-                  >
-                    <div className="shrink-0 transition-transform group-active:scale-110">
-                      {done ? (
-                        <CheckCircle2 className="size-6" style={{ color: h.color }} />
-                      ) : (
-                        <Circle className="size-6 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className="truncate font-medium text-foreground"
-                        style={{
-                          textDecoration: done ? "line-through" : "none",
-                          opacity: done ? 0.5 : 1,
-                        }}
-                      >
-                        {h.name}
-                      </div>
-                      {h.description && (
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {h.description}
-                        </div>
-                      )}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className="font-mono text-xs tabular-nums" style={{ color: h.color }}>
-                        {Math.round(pct * 100)}%
-                      </div>
-                      <div className="mt-1 h-1 w-14 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.08)]">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${pct * 100}%`, background: h.color }}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+              {todayHabits.map((h) => (
+                <TodayHabitRow key={h.id} habit={h} onToggle={toggleToday} onSaveNote={saveNote} />
+              ))}
             </div>
           )}
         </div>
@@ -858,6 +814,7 @@ function MobileApp(p: AppProps) {
     todayHabits,
     rollup,
     toggleToday,
+    saveNote,
     setOpenId,
     setEditId,
     handleDelete,
@@ -1053,63 +1010,14 @@ function MobileApp(p: AppProps) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {todayHabits.map((h) => {
-                      const t = today(),
-                        done = h.track[t]?.done ?? false,
-                        inRange = h.track[t] !== undefined;
-                      const { pct } = progress(h);
-                      return (
-                        <button
-                          key={h.id}
-                          onClick={() => inRange && toggleToday(h.id)}
-                          disabled={!inRange}
-                          className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] disabled:opacity-50"
-                          style={{
-                            borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
-                            background: done ? `${h.color}12` : "var(--color-card)",
-                            boxShadow: "var(--shadow-soft)",
-                          }}
-                        >
-                          <div className="shrink-0">
-                            {done ? (
-                              <CheckCircle2 className="size-6" style={{ color: h.color }} />
-                            ) : (
-                              <Circle className="size-6 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div
-                              className="truncate font-medium text-foreground"
-                              style={{
-                                textDecoration: done ? "line-through" : "none",
-                                opacity: done ? 0.55 : 1,
-                              }}
-                            >
-                              {h.name}
-                            </div>
-                            {h.description && (
-                              <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {h.description}
-                              </div>
-                            )}
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <div
-                              className="font-mono text-xs tabular-nums"
-                              style={{ color: h.color }}
-                            >
-                              {Math.round(pct * 100)}%
-                            </div>
-                            <div className="mt-0.5 h-1 w-12 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.08)]">
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{ width: `${pct * 100}%`, background: h.color }}
-                              />
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {todayHabits.map((h) => (
+                      <TodayHabitRow
+                        key={h.id}
+                        habit={h}
+                        onToggle={toggleToday}
+                        onSaveNote={saveNote}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -1515,6 +1423,173 @@ function EmptyState({ filter }: { filter: FilterId }) {
       <p className="mt-3 max-w-sm font-display text-xl leading-tight text-foreground">
         {copy[filter]}
       </p>
+    </div>
+  );
+}
+
+/* ─── TodayHabitRow — shared check-off card with inline note editor ─── */
+function TodayHabitRow({
+  habit: h,
+  onToggle,
+  onSaveNote,
+}: {
+  habit: Habit;
+  onToggle: (id: string) => void;
+  onSaveNote: (id: string, note: string) => void;
+}) {
+  const t = today();
+  const entry = h.track[t];
+  const done = entry?.done ?? false;
+  const inRange = entry !== undefined;
+  const existingNote = entry?.note ?? "";
+  const { pct } = progress(h);
+
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState(existingNote);
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keep note text in sync if Firestore updates come in
+  useEffect(() => {
+    setNoteText(existingNote);
+  }, [existingNote]);
+
+  const toggleNote = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNoteOpen((prev) => {
+      if (!prev) setTimeout(() => textareaRef.current?.focus(), 80);
+      return !prev;
+    });
+  };
+
+  const handleSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      onSaveNote(h.id, noteText.trim());
+    } finally {
+      setSaving(false);
+      setNoteOpen(false);
+    }
+  };
+
+  const hasNote = existingNote.trim().length > 0;
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border transition-all"
+      style={{
+        borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
+        background: done ? `${h.color}10` : "var(--color-card)",
+        boxShadow: "var(--shadow-soft)",
+      }}
+    >
+      {/* Main row — flat div with independent clickable zones */}
+      <div className="flex w-full items-center gap-3 p-4">
+        {/* Checkbox button */}
+        <button
+          onClick={() => inRange && onToggle(h.id)}
+          disabled={!inRange}
+          className="shrink-0 transition-transform active:scale-110 disabled:opacity-50"
+        >
+          {done ? (
+            <CheckCircle2 className="size-6" style={{ color: h.color }} />
+          ) : (
+            <Circle className="size-6 text-muted-foreground" />
+          )}
+        </button>
+        {/* Name + description — click area for toggling */}
+        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => inRange && onToggle(h.id)}>
+          <div
+            className="truncate font-medium text-foreground"
+            style={{ textDecoration: done ? "line-through" : "none", opacity: done ? 0.55 : 1 }}
+          >
+            {h.name}
+          </div>
+          {h.description && (
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">{h.description}</div>
+          )}
+        </div>
+        {/* Right side — note button + progress */}
+        <div className="flex shrink-0 items-center gap-2">
+          {inRange && (
+            <button
+              onClick={toggleNote}
+              className="relative rounded-lg p-1.5 transition-all hover:bg-[oklch(1_0_0_/_0.06)] active:scale-90"
+              title={hasNote ? "Edit note" : "Add note"}
+            >
+              <StickyNote
+                className="size-4"
+                style={{
+                  color: noteOpen ? h.color : hasNote ? h.color : "var(--color-muted-foreground)",
+                  opacity: hasNote || noteOpen ? 1 : 0.6,
+                }}
+              />
+              {hasNote && !noteOpen && (
+                <span
+                  className="absolute right-1 top-1 size-1.5 rounded-full"
+                  style={{ background: h.color }}
+                />
+              )}
+            </button>
+          )}
+          <div className="text-right">
+            <div className="font-mono text-xs tabular-nums" style={{ color: h.color }}>
+              {Math.round(pct * 100)}%
+            </div>
+            <div className="mt-0.5 h-1 w-12 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.08)]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct * 100}%`, background: h.color }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Inline note editor — slides open */}
+      {noteOpen && (
+        <div
+          className="border-t px-4 pb-4 pt-3"
+          style={{ borderColor: `${h.color}25`, background: `${h.color}08` }}
+        >
+          <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            <StickyNote className="size-3" style={{ color: h.color }} /> Note for today
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="How did it go? Any reflection…"
+            rows={3}
+            className="w-full resize-none rounded-xl border border-border bg-[oklch(1_0_0_/_0.03)] px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 transition-colors"
+            style={{ ["--tw-ring-color" as string]: h.color }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setNoteOpen(false);
+            }}
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setNoteOpen(false);
+                setNoteText(existingNote);
+              }}
+              className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-all hover:text-foreground active:scale-95"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: h.color }}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
