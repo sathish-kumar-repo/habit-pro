@@ -161,14 +161,15 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
 
   // Calendar navigation bounds
   const allKeys = Object.keys(habit.track).sort();
-  const firstDate = allKeys.length ? new Date(habit.track[allKeys[0]].date) : new Date();
-  const lastDate = allKeys.length
-    ? new Date(habit.track[allKeys[allKeys.length - 1]].date)
-    : new Date();
-  const minYear = firstDate.getFullYear();
-  const minMonth = firstDate.getMonth();
-  const maxYear = lastDate.getFullYear();
-  const maxMonth = lastDate.getMonth();
+  const [startY, startM, startD] = habit.startDate.split("-").map(Number);
+  const [endY, endM, endD] = habit.endDate.split("-").map(Number);
+  const startDate = new Date(startY, startM - 1, startD);
+  const endDate = new Date(endY, endM - 1, endD);
+
+  const minYear = startDate.getFullYear();
+  const minMonth = startDate.getMonth();
+  const maxYear = endDate.getFullYear();
+  const maxMonth = endDate.getMonth();
 
   const canGoPrev = viewYear > minYear || (viewYear === minYear && viewMonth > minMonth);
   const canGoNext = viewYear < maxYear || (viewYear === maxYear && viewMonth < maxMonth);
