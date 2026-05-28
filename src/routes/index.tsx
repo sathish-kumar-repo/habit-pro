@@ -444,11 +444,8 @@ function DesktopApp(p: AppProps) {
       >
         {/* Brand */}
         <div className="flex items-center gap-3 px-5 pt-6 pb-5">
-          <div
-            className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"
-            style={{ boxShadow: "var(--shadow-glow)" }}
-          >
-            <span className="font-display text-lg leading-none">H</span>
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl">
+            <img src="/logo.png" alt="Habito" className="size-full object-cover" />
           </div>
           <div>
             <div className="font-display text-[17px] leading-none tracking-tight">Habito</div>
@@ -1669,11 +1666,8 @@ function MobileApp(p: AppProps) {
         }}
       >
         <div className="flex items-center gap-2.5">
-          <div
-            className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground"
-            style={{ boxShadow: "var(--shadow-glow)" }}
-          >
-            <span className="font-display text-lg leading-none">H</span>
+          <div className="grid size-9 place-items-center rounded-xl">
+            <img src="/logo.png" alt="Habito" className="size-full object-cover" />
           </div>
           <div>
             <div className="font-display text-[17px] leading-none tracking-tight">Habito</div>
