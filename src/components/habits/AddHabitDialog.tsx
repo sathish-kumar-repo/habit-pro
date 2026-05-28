@@ -6,7 +6,6 @@ import { COLORS, createHabit, habitSchema } from "@/lib/habits";
 import { DatePickerWithPresets } from "./DatePickerWithPresets";
 import { HABIT_ICONS, HabitIcon, DEFAULT_ICON } from "./HabitIcon";
 import type { z } from "zod";
-import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type FieldErrors = Partial<Record<keyof z.infer<typeof habitSchema>, string>>;

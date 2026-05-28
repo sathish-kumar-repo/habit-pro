@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
-import { Habit, progress, streak, fmtDate, setHabitNote, toggleHabitDay } from "@/lib/habits";
+import { Habit, progress, streak, fmtDate, setHabitNote } from "@/lib/habits";
 import {
   Flame,
   Target,
@@ -13,7 +13,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { HabitIcon } from "./HabitIcon";
-import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import { DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type Props = {
@@ -148,9 +148,9 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
   useEffect(() => {
     if (selectedDay && habit) {
       setNoteText(habit.track[selectedDay]?.note ?? "");
-      setTimeout(() => noteRef.current?.focus(), 120);
+      if (isDesktop) setTimeout(() => noteRef.current?.focus(), 120);
     }
-  }, [selectedDay, habit]);
+  }, [selectedDay, habit, isDesktop]);
 
   if (!habit) return null;
 
@@ -261,22 +261,16 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
             </div>
 
             {isDesktop ? (
-              <DialogTitle className="font-display text-2xl leading-tight text-white xl:text-3xl">
+              <p className="font-display text-2xl leading-tight text-white xl:text-3xl">
                 {habit.name}
-              </DialogTitle>
+              </p>
             ) : (
-              <DrawerTitle className="font-display text-2xl leading-tight text-white">
-                {habit.name}
-              </DrawerTitle>
+              <p className="font-display text-2xl leading-tight text-white">{habit.name}</p>
             )}
             {isDesktop ? (
-              <DialogDescription className="sr-only">
-                Habit details for {habit.name}
-              </DialogDescription>
+              <p className="sr-only">Habit details for {habit.name}</p>
             ) : (
-              <DrawerDescription className="sr-only">
-                Habit details for {habit.name}
-              </DrawerDescription>
+              <p className="sr-only">Habit details for {habit.name}</p>
             )}
 
             {habit.description && (
@@ -695,16 +689,6 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
   return habit ? (
     <div className="fixed inset-0 z-50 bg-[oklch(0.185_0.008_240)]">
       <div className="flex h-[100dvh] flex-col overflow-hidden">
-        {/* Header */}
-        <div
-          className="shrink-0 border-b border-border px-5 pt-5 pb-4"
-          style={{
-            paddingTop: "max(1.25rem, env(safe-area-inset-top))",
-          }}
-        >
-          {header}
-        </div>
-
         {/* Body */}
         <div
           className="flex-1 overflow-y-auto overscroll-contain scrollbar-none"
@@ -713,16 +697,6 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
           }}
         >
           {body}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="shrink-0 border-t border-border"
-          style={{
-            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-          }}
-        >
-          {footer}
         </div>
       </div>
     </div>
