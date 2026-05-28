@@ -199,12 +199,12 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
                 Define the intention and the window.
               </DialogDescription>
             </div>
-            {/* <button
+            <button
               onClick={handleClose}
               className="rounded-full p-2 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
             >
               <X className="size-4" />
-            </button> */}
+            </button>
           </div>
           {/* Body */}
           <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: "calc(80dvh - 160px)" }}>
