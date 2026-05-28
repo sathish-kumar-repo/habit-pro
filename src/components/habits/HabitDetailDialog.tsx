@@ -627,7 +627,7 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
                   className="w-full resize-none rounded-xl border bg-[oklch(0_0_0_/_0.15)] px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none transition-colors"
                   style={{
                     borderColor: `${color}30`,
-                    focusBorderColor: color,
+                    // focusBorderColor: color,
                   }}
                   onFocus={(e) => (e.target.style.borderColor = `${color}80`)}
                   onBlur={(e) => (e.target.style.borderColor = `${color}30`)}
