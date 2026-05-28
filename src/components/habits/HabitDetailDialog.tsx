@@ -241,15 +241,6 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
           }}
         />
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-full transition-all active:scale-90"
-          style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.85)" }}
-        >
-          <X className="size-4" />
-        </button>
-
         <div className="relative z-10 flex items-start gap-4">
           {/* Text */}
           <div className="min-w-0 flex-1">
