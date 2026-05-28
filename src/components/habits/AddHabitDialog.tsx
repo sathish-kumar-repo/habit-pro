@@ -140,7 +140,6 @@ export function AddHabitDialog() {
               label="Start"
               value={start}
               onChange={setStart}
-              minDate={new Date(new Date().setHours(0, 0, 0, 0))}
               error={errors.start}
             />
             <DatePickerWithPresets

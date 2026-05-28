@@ -42,11 +42,7 @@ export const habitSchema = z
       .string()
       .max(500, "Plan must be 500 characters or less")
       .transform((v) => v.trim()),
-    start: z
-      .date({ message: "Start date is required" })
-      .refine((d) => d >= new Date(new Date().setHours(0, 0, 0, 0)), {
-        message: "Start date cannot be in the past",
-      }),
+    start: z.date({ message: "Start date is required" }),
     end: z.date({ message: "End date is required" }),
     color: z.string().min(1),
   })
