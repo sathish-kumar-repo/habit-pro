@@ -32,7 +32,26 @@ import {
   Users,
   Bike,
   Flame,
+
+  // NEW ICONS 🚀
+  CandlestickChart,
+  TrendingUp,
+  TrendingDown,
+  Briefcase,
+  Gamepad2,
+  Film,
+  Monitor,
+  Smartphone,
+  Bed,
+  Activity,
+  Utensils,
+  Timer,
+  Shield,
+  PiggyBank,
+  Rocket,
+  Medal,
 } from "lucide-react";
+
 import type { ComponentType } from "react";
 
 export const HABIT_ICONS = [
@@ -68,6 +87,24 @@ export const HABIT_ICONS = [
   "Users",
   "Bike",
   "Flame",
+
+  // NEW ICONS 🚀
+  "CandlestickChart",
+  "TrendingUp",
+  "TrendingDown",
+  "Briefcase",
+  "Gamepad2",
+  "Film",
+  "Monitor",
+  "Smartphone",
+  "Bed",
+  "Activity",
+  "Utensils",
+  "Timer",
+  "Shield",
+  "PiggyBank",
+  "Rocket",
+  "Medal",
 ] as const;
 
 export type HabitIconName = (typeof HABIT_ICONS)[number];
@@ -105,10 +142,27 @@ const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
   Users,
   Bike,
   Flame,
+  CandlestickChart,
+  TrendingUp,
+  TrendingDown,
+  Briefcase,
+  Gamepad2,
+  Film,
+  Monitor,
+  Smartphone,
+  Bed,
+  Activity,
+  Utensils,
+  Timer,
+  Shield,
+  PiggyBank,
+  Rocket,
+  Medal,
 };
 
 export function HabitIcon({ name, ...props }: { name?: string } & LucideProps) {
   const Icon = name && ICON_MAP[name] ? ICON_MAP[name] : Star;
+
   return <Icon {...props} />;
 }
 
