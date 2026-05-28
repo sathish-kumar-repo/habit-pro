@@ -692,26 +692,41 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
     );
   }
 
-  return (
-    <Drawer open={!!habit} onOpenChange={(o) => !o && onClose()} shouldScaleBackground={false}>
-      <DrawerContent
-        className="border-border focus:outline-none"
-        style={{
-          background: "oklch(0.185 0.008 240)",
-          maxHeight: "96dvh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
+  return habit ? (
+    <div className="fixed inset-0 z-50 bg-[oklch(0.185_0.008_240)]">
+      <div className="flex h-[100dvh] flex-col overflow-hidden">
+        {/* Header */}
         <div
-          className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full"
-          style={{ background: "oklch(1 0 0 / 0.15)" }}
-        />
-        {body}
-      </DrawerContent>
-    </Drawer>
-  );
+          className="shrink-0 border-b border-border px-5 pt-5 pb-4"
+          style={{
+            paddingTop: "max(1.25rem, env(safe-area-inset-top))",
+          }}
+        >
+          {header}
+        </div>
+
+        {/* Body */}
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain scrollbar-none"
+          style={{
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {body}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="shrink-0 border-t border-border"
+          style={{
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          {footer}
+        </div>
+      </div>
+    </div>
+  ) : null;
 }
 
 function StatChip({

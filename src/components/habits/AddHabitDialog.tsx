@@ -247,42 +247,60 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
     );
   }
 
-  return (
-    <Drawer open={open} onOpenChange={(o) => !o && handleClose()} shouldScaleBackground={false}>
-      <DrawerContent
-        className="border-border bg-[oklch(0.185_0.008_240)] focus:outline-none"
-        style={{ maxHeight: "92dvh" }}
-      >
-        <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[oklch(1_0_0_/_0.15)]" />
-        <div className="flex items-start justify-between px-5 pt-4 pb-3">
+  return open ? (
+    <div className="fixed inset-0 z-50 bg-[oklch(0.185_0.008_240)]">
+      <div className="flex h-[100dvh] flex-col overflow-hidden">
+        {/* Header */}
+        <div
+          className="flex items-start justify-between border-b border-border px-5 pt-5 pb-4 shrink-0"
+          style={{
+            paddingTop: "max(1.25rem, env(safe-area-inset-top))",
+          }}
+        >
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
               New commitment
             </div>
-            <DrawerTitle className="mt-1 font-display text-3xl leading-none text-foreground">
+
+            <h2 className="mt-1 font-display text-3xl leading-none text-foreground">
               Design a habit.
-            </DrawerTitle>
-            <DrawerDescription className="mt-1 text-sm text-muted-foreground">
+            </h2>
+
+            <p className="mt-1 text-sm text-muted-foreground">
               Define the intention and the window.
-            </DrawerDescription>
+            </p>
           </div>
+
           <button
             onClick={handleClose}
-            className="mt-1 rounded-full p-2 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+            className="rounded-full p-2 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
           >
             <X className="size-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-3">{formBody}</div>
+
+        {/* Body */}
         <div
-          className="border-t border-border px-5 py-4"
-          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          className="flex-1 overflow-y-auto px-5 py-4 overscroll-contain scrollbar-none"
+          style={{
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {formBody}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="shrink-0 border-t border-border px-5 py-4"
+          style={{
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
         >
           {footer}
         </div>
-      </DrawerContent>
-    </Drawer>
-  );
+      </div>
+    </div>
+  ) : null;
 }
 
 function Field({
