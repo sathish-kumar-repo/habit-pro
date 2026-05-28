@@ -63,14 +63,53 @@ export const DATE_PRESETS = [
 ] as const;
 
 export const COLORS = [
+  // Emerald / Sage
   "#20A973",
   "#2DA796",
-  "#319DC4",
-  "#7F52E0",
-  "#CE3475",
-  "#E48068",
-  "#E4A12B",
   "#578E57",
+  "#6FAF8F",
+
+  // Teal / Ocean
+  "#319DC4",
+  "#3E8FB0",
+  "#4AA3A2",
+  "#5DA9E9",
+
+  // Indigo / Violet
+  "#7F52E0",
+  "#6D5BD0",
+  "#8B6BE8",
+  "#5B4BC4",
+
+  // Rose / Editorial
+  "#CE3475",
+  "#C94F7C",
+  "#D46A92",
+  "#B93C68",
+
+  // Warm Sunset
+  "#E48068",
+  "#D96C5F",
+  "#C96A4A",
+  "#F08A5D",
+
+  // Gold / Amber
+  "#E4A12B",
+  "#D4A017",
+  "#C7922F",
+  "#F2B84B",
+
+  // Elegant Muted
+  "#7A8C99",
+  "#6B7280",
+  "#8B7E74",
+  "#7C6F64",
+
+  // Deep Premium
+  "#4C5B70",
+  "#5A4E7C",
+  "#3F6B68",
+  "#6A5A4D",
 ];
 
 /**
