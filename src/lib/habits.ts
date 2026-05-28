@@ -7,6 +7,7 @@ import {
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
+import { z } from "zod";
 import { CHALLENGE_COLLECTION, db } from "./firebase";
 
 // Track entry mirrors the Flutter app: [done, note, Timestamp]
@@ -23,6 +24,47 @@ export type Habit = {
   color: string;
   createdAt: number;
 };
+
+// ---------- Validation ----------
+
+export const habitSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Name is required")
+      .max(60, "Name must be 60 characters or less")
+      .transform((v) => v.trim()),
+    description: z
+      .string()
+      .max(200, "Description must be 200 characters or less")
+      .transform((v) => v.trim()),
+    plan: z
+      .string()
+      .max(500, "Plan must be 500 characters or less")
+      .transform((v) => v.trim()),
+    start: z
+      .date({ message: "Start date is required" })
+      .refine((d) => d >= new Date(new Date().setHours(0, 0, 0, 0)), {
+        message: "Start date cannot be in the past",
+      }),
+    end: z.date({ message: "End date is required" }),
+    color: z.string().min(1),
+  })
+  .refine((d) => d.end >= d.start, {
+    message: "End date must be on or after start date",
+    path: ["end"],
+  });
+
+export type HabitFormValues = z.infer<typeof habitSchema>;
+
+export const DATE_PRESETS = [
+  { label: "7 days", days: 7 },
+  { label: "14 days", days: 14 },
+  { label: "21 days", days: 21 },
+  { label: "30 days", days: 30 },
+  { label: "60 days", days: 60 },
+  { label: "90 days", days: 90 },
+] as const;
 
 export const COLORS = [
   "#20A973",
@@ -250,5 +292,34 @@ export async function setHabitNote(habit: Habit, dayKey: string, note: string): 
   const next = { ...habit.track, [dayKey]: { ...entry, note } };
   await updateDoc(doc(db, CHALLENGE_COLLECTION, habit.id), {
     track: toFirestoreTrack(next),
+  });
+}
+
+export async function updateHabit(
+  habit: Habit,
+  input: {
+    name: string;
+    description: string;
+    plan: string;
+    start: Date;
+    end: Date;
+    color: string;
+  },
+): Promise<void> {
+  const track = buildTrack(input.start, input.end);
+  // preserve existing completion state for days that still fall within the new range
+  for (const [key, entry] of Object.entries(habit.track)) {
+    if (track[key]) {
+      track[key] = { ...track[key], done: entry.done, note: entry.note };
+    }
+  }
+  await updateDoc(doc(db, CHALLENGE_COLLECTION, habit.id), {
+    myChallenge: input.name,
+    description: input.description,
+    myPlan: input.plan,
+    challengeStartDate: Timestamp.fromDate(input.start),
+    challengeEndDate: Timestamp.fromDate(input.end),
+    track: toFirestoreTrack(track),
+    color: input.color,
   });
 }

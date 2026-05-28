@@ -1,5 +1,5 @@
 import { Habit, progress, streak, today, fmtDate } from "@/lib/habits";
-import { Flame, Trash2, Check } from "lucide-react";
+import { Flame, Trash2, Check, Pencil } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +16,7 @@ type Props = {
   habit: Habit;
   onToggleToday: (id: string) => void;
   onOpen: (id: string) => void;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 };
 
@@ -49,7 +50,7 @@ function buildHeatmap(habit: Habit, weeks = 14) {
   return cols;
 }
 
-export function HabitCard({ habit, onToggleToday, onOpen, onDelete }: Props) {
+export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Props) {
   const { done, total, pct } = progress(habit);
   const s = streak(habit);
   const t = today();
@@ -84,34 +85,43 @@ export function HabitCard({ habit, onToggleToday, onOpen, onDelete }: Props) {
               </p>
             )}
           </button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button
-                className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-destructive group-hover:opacity-100 focus:opacity-100"
-                aria-label="Delete habit"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{habit.name}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This permanently removes the habit and all of its tracking history. This action
-                  cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => onDelete(habit.id)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100 focus-within:opacity-100">
+            <button
+              onClick={() => onEdit(habit.id)}
+              className="rounded-md p-1.5 text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
+              aria-label="Edit habit"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-destructive group-hover:opacity-100 focus:opacity-100"
+                  aria-label="Delete habit"
                 >
-                  Delete habit
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <Trash2 className="size-3.5" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{habit.name}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently removes the habit and all of its tracking history. This action
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => onDelete(habit.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete habit
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {/* heatmap */}

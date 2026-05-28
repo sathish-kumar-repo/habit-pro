@@ -15,6 +15,7 @@ import {
 import { HabitCard } from "@/components/habits/HabitCard";
 import { AddHabitDialog } from "@/components/habits/AddHabitDialog";
 import { HabitDetailDialog } from "@/components/habits/HabitDetailDialog";
+import { EditHabitDialog } from "@/components/habits/EditHabitDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,6 +47,7 @@ function Index() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [filter, setFilter] = useState<FilterId>("ongoing");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeHabits(setHabits);
@@ -116,6 +118,7 @@ function Index() {
     if (habit) void toggleHabitDay(habit, day);
   };
   const openHabit = habits.find((h) => h.id === openId) ?? null;
+  const editHabit = habits.find((h) => h.id === editId) ?? null;
 
   return (
     <div className="flex min-h-screen">
@@ -322,6 +325,7 @@ function Index() {
                   habit={h}
                   onToggleToday={toggleToday}
                   onOpen={setOpenId}
+                  onEdit={setEditId}
                   onDelete={handleDelete}
                 />
               ))}
@@ -339,6 +343,8 @@ function Index() {
         onClose={() => setOpenId(null)}
         onToggleDay={toggleDay}
       />
+
+      <EditHabitDialog habit={editHabit} onClose={() => setEditId(null)} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,60 +6,47 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
-import { COLORS, createHabit, habitSchema } from "@/lib/habits";
+import { Pencil } from "lucide-react";
+import { Habit, COLORS, habitSchema, updateHabit } from "@/lib/habits";
 import { DatePickerWithPresets } from "./DatePickerWithPresets";
-import type { z } from "zod";
+
+type Props = {
+  habit: Habit | null;
+  onClose: () => void;
+};
 
 type FieldErrors = Partial<Record<keyof z.infer<typeof habitSchema>, string>>;
 
-export function AddHabitDialog() {
-  const [open, setOpen] = useState(false);
+export function EditHabitDialog({ habit, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [plan, setPlan] = useState("");
-  const [start, setStart] = useState<Date | undefined>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-  const [end, setEnd] = useState<Date | undefined>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [start, setStart] = useState<Date | undefined>();
+  const [end, setEnd] = useState<Date | undefined>();
   const [color, setColor] = useState(COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
 
-  const reset = () => {
-    setName("");
-    setDescription("");
-    setPlan("");
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    setStart(d);
-    const e = new Date();
-    e.setDate(e.getDate() + 30);
+  useEffect(() => {
+    if (!habit) return;
+    setName(habit.name);
+    setDescription(habit.description);
+    setPlan(habit.plan);
+    const s = new Date(habit.startDate);
+    s.setHours(0, 0, 0, 0);
+    const e = new Date(habit.endDate);
     e.setHours(0, 0, 0, 0);
+    setStart(s);
     setEnd(e);
-    setColor(COLORS[0]);
+    setColor(habit.color);
     setErrors({});
-  };
+  }, [habit]);
 
   const submit = async () => {
-    if (!start || !end) {
-      setErrors({
-        ...(!start ? { start: "Start date is required" } : {}),
-        ...(!end ? { end: "End date is required" } : {}),
-      });
-      return;
-    }
+    if (!habit || !start || !end) return;
     const result = habitSchema.safeParse({
       name,
       description,
@@ -80,33 +67,26 @@ export function AddHabitDialog() {
     setErrors({});
     setSaving(true);
     try {
-      await createHabit(result.data);
-      reset();
-      setOpen(false);
+      await updateHabit(habit, result.data);
+      onClose();
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:scale-[1.02]"
-          style={{ boxShadow: "var(--shadow-glow)" }}
-        >
-          <Plus className="size-4 transition-transform group-hover:rotate-90" />
-          New habit
-        </button>
-      </DialogTrigger>
+    <Dialog open={!!habit} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl border-border bg-popover">
         <DialogHeader>
-          <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-            New commitment
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+            <Pencil className="size-3" />
+            Edit commitment
           </div>
-          <DialogTitle className="font-display text-4xl leading-none">Design a habit.</DialogTitle>
+          <DialogTitle className="font-display text-4xl leading-none">
+            Refine the habit.
+          </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Define the intention and the window. Show up daily.
+            Adjust the intention, window, or plan.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-3">
@@ -140,7 +120,6 @@ export function AddHabitDialog() {
               label="Start"
               value={start}
               onChange={setStart}
-              minDate={new Date(new Date().setHours(0, 0, 0, 0))}
               error={errors.start}
             />
             <DatePickerWithPresets
@@ -171,17 +150,10 @@ export function AddHabitDialog() {
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
           <button
-            onClick={() => setOpen(false)}
+            onClick={onClose}
             className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
-          >
-            Reset
           </button>
           <button
             onClick={submit}
@@ -189,7 +161,7 @@ export function AddHabitDialog() {
             className="rounded-full px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
             style={{ background: color }}
           >
-            {saving ? "Creating..." : "Commit"}
+            {saving ? "Saving…" : "Update"}
           </button>
         </DialogFooter>
       </DialogContent>
