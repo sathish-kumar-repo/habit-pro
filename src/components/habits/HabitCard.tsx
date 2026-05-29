@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Habit, progress, streak, today, fmtDate } from "@/lib/habits";
 import { Flame, Trash2, Check, Pencil, CheckCircle2 } from "lucide-react";
 import { HabitIcon } from "./HabitIcon";
+import { useConfetti } from "@/hooks/use-confetti";
+import { playCompletionSound, triggerHaptic } from "@/lib/completion-fx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +53,7 @@ function buildHeatmap(habit: Habit, weeks = 14) {
   return cols;
 }
 
-const REVEAL_WIDTH = 156; // px — width of the action tray
+const REVEAL_WIDTH = 156;
 const SWIPE_THRESHOLD = 72;
 
 export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Props) {
@@ -62,7 +64,39 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
   const inRange = habit.track[t] !== undefined;
   const grid = buildHeatmap(habit);
 
-  // Swipe state
+  // ── Celebration state ────────────────────────────────
+  const confetti = useConfetti();
+  const prevDoneRef = useRef(todayDone);
+  const [glowing, setGlowing] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
+
+  useEffect(() => {
+    if (!prevDoneRef.current && todayDone) {
+      setGlowing(true);
+      setBouncing(true);
+      confetti.trigger(habit.color);
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        playCompletionSound();
+      }
+      triggerHaptic();
+    }
+    prevDoneRef.current = todayDone;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayDone]);
+
+  useEffect(() => {
+    if (!glowing) return;
+    const id = setTimeout(() => setGlowing(false), 1300);
+    return () => clearTimeout(id);
+  }, [glowing]);
+
+  useEffect(() => {
+    if (!bouncing) return;
+    const id = setTimeout(() => setBouncing(false), 700);
+    return () => clearTimeout(id);
+  }, [bouncing]);
+
+  // ── Swipe state ──────────────────────────────────────
   const [translateX, setTranslateX] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -87,50 +121,42 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
   const onTouchMove = (e: React.TouchEvent) => {
     const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
-
     if (direction.current === null) {
       if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
         direction.current = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
       }
     }
-
     if (direction.current !== "h") return;
     dragging.current = true;
-
     if (isRevealed) {
-      // Already revealed — allow swiping right to close
       const raw = -REVEAL_WIDTH + dx;
       setTranslateX(Math.min(0, Math.max(-REVEAL_WIDTH, raw)));
     } else {
-      // Not revealed — only allow left swipe
-      if (dx < 0) {
-        setTranslateX(Math.max(-REVEAL_WIDTH, dx * 0.85));
-      }
+      if (dx < 0) setTranslateX(Math.max(-REVEAL_WIDTH, dx * 0.85));
     }
   };
 
   const onTouchEnd = () => {
     if (!dragging.current) return;
-
     if (isRevealed) {
-      const shouldClose = translateX > -REVEAL_WIDTH + 40;
-      snapTo(!shouldClose);
+      snapTo(translateX > -REVEAL_WIDTH + 40 ? false : true);
     } else {
       snapTo(translateX < -SWIPE_THRESHOLD);
     }
   };
 
   const handleCardTap = () => {
-    if (isRevealed) {
-      snapTo(false);
-    } else {
-      onOpen(habit.id);
-    }
+    if (isRevealed) snapTo(false);
+    else onOpen(habit.id);
   };
+
+  // Glow CSS custom properties
+  const glowColor = habit.color;
+  const glowColorDim = habit.color + "40";
 
   return (
     <div className="relative overflow-hidden rounded-2xl" style={{ touchAction: "pan-y" }}>
-      {/* Action tray — sits behind the card */}
+      {/* Action tray */}
       <div
         className="absolute inset-y-0 right-0 flex items-stretch"
         style={{ width: REVEAL_WIDTH }}
@@ -180,7 +206,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
         </AlertDialog>
       </div>
 
-      {/* Main card — slides left to reveal tray */}
+      {/* Main card */}
       <article
         className="relative flex min-h-[320px] flex-col border bg-card"
         style={{
@@ -189,15 +215,25 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
             ? "none"
             : "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
           borderRadius: "1rem",
-          boxShadow: "var(--shadow-soft)",
           borderColor: isRevealed ? "oklch(1 0 0 / 0.12)" : "oklch(1 0 0 / 0.07)",
           overflow: "hidden",
+          /* CSS custom props for glow keyframe */
+          ["--glow-c" as string]: glowColor,
+          ["--glow-c-dim" as string]: glowColorDim,
+          animation: glowing ? "habit-glow 1.3s ease-out forwards" : undefined,
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* color edge */}
+        {/* Confetti canvas — full-card overlay */}
+        <canvas
+          ref={confetti.canvasRef}
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{ width: "100%", height: "100%" }}
+        />
+
+        {/* Color edge */}
         <span
           className="absolute left-0 top-0 h-full w-[3px]"
           style={{ background: `linear-gradient(180deg, ${habit.color}, transparent 80%)` }}
@@ -324,19 +360,32 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
               <Stat label="Prog." value={`${Math.round(pct * 100)}%`} />
             </div>
 
-            {/* Mark today button — touch friendly */}
+            {/* Mark today button */}
             <button
+              ref={confetti.buttonRef}
               onClick={() => onToggleToday(habit.id)}
               disabled={!inRange}
-              className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={
-                todayDone
+              className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors active:scale-95 disabled:opacity-40"
+              style={{
+                ...(todayDone
                   ? { background: habit.color, color: "white", borderColor: habit.color }
-                  : { borderColor: "oklch(1 0 0 / 0.12)", color: "var(--color-foreground)" }
-              }
+                  : { borderColor: "oklch(1 0 0 / 0.12)", color: "var(--color-foreground)" }),
+                animation: bouncing
+                  ? "btn-complete 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+                  : undefined,
+              }}
             >
               {todayDone ? (
-                <CheckCircle2 className="size-4" style={{ color: "white" }} />
+                <span
+                  style={{
+                    display: "inline-flex",
+                    animation: bouncing
+                      ? "check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+                      : undefined,
+                  }}
+                >
+                  <CheckCircle2 className="size-4" style={{ color: "white" }} />
+                </span>
               ) : (
                 <Check className="size-4" style={{ color: "var(--color-muted-foreground)" }} />
               )}
@@ -354,7 +403,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
         </div>
       </article>
 
-      {/* Swipe hint label — fades in when card is swiped */}
+      {/* Swipe hint */}
       {translateX < -20 && !isRevealed && (
         <div
           className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"

@@ -19,6 +19,9 @@ import {
   Activity,
   CalendarCheck,
   Award,
+  Search,
+  X,
+  SortAsc,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import {
@@ -37,6 +40,8 @@ import { HabitCard } from "@/components/habits/HabitCard";
 import { AddHabitDialog } from "@/components/habits/AddHabitDialog";
 import { HabitDetailDialog } from "@/components/habits/HabitDetailDialog";
 import { EditHabitDialog } from "@/components/habits/EditHabitDialog";
+import { useConfetti } from "@/hooks/use-confetti";
+import { playCompletionSound, triggerHaptic } from "@/lib/completion-fx";
 import { HabitIcon } from "@/components/habits/HabitIcon";
 
 export const Route = createFileRoute("/")({
@@ -60,6 +65,15 @@ type AppTab = "today" | "habits" | "progress";
 
 type ProgressRange = "7d" | "30d" | "all";
 type ProgressSort = "pct" | "streak" | "name";
+type HabitSort = "default" | "name_asc" | "name_desc" | "streak" | "progress";
+
+const HABIT_SORT_OPTIONS: { id: HabitSort; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "name_asc", label: "Name A–Z" },
+  { id: "name_desc", label: "Name Z–A" },
+  { id: "streak", label: "Streak ↓" },
+  { id: "progress", label: "Progress ↓" },
+];
 
 /* ─── shared data hook ───────────────────────── */
 function useAppData() {
@@ -71,6 +85,8 @@ function useAppData() {
   const [tab, setTab] = useState<AppTab>("today");
   const [progressRange, setProgressRange] = useState<ProgressRange>("7d");
   const [progressSort, setProgressSort] = useState<ProgressSort>("pct");
+  const [habitSearch, setHabitSearch] = useState("");
+  const [habitSort, setHabitSort] = useState<HabitSort>("default");
 
   useEffect(() => {
     const u = subscribeHabits(setHabits);
@@ -87,15 +103,21 @@ function useAppData() {
 
   const filtered = useMemo(() => {
     const t = today();
+    const q = habitSearch.trim().toLowerCase();
     return habits
       .filter((h) => classify(h) === filter)
+      .filter((h) => (q ? h.name.toLowerCase().includes(q) : true))
       .sort((a, b) => {
+        if (habitSort === "name_asc") return a.name.localeCompare(b.name);
+        if (habitSort === "name_desc") return b.name.localeCompare(a.name);
+        if (habitSort === "streak") return streak(b) - streak(a);
+        if (habitSort === "progress") return progress(b).pct - progress(a).pct;
         const ad = a.track[t]?.done ? 1 : 0,
           bd = b.track[t]?.done ? 1 : 0;
         if (ad !== bd) return ad - bd;
         return b.createdAt - a.createdAt;
       });
-  }, [habits, filter]);
+  }, [habits, filter, habitSearch, habitSort]);
 
   const stats = useMemo(() => {
     const t = today();
@@ -387,6 +409,10 @@ function useAppData() {
     setProgressRange,
     progressSort,
     setProgressSort,
+    habitSearch,
+    setHabitSearch,
+    habitSort,
+    setHabitSort,
     weekdayStats,
     periodComparison,
     personalRecords,
@@ -797,7 +823,14 @@ function DesktopHabits({
   setEditId,
   handleDelete,
   setAddOpen,
+  habitSearch,
+  setHabitSearch,
+  habitSort,
+  setHabitSort,
 }: AppProps) {
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortLabel = HABIT_SORT_OPTIONS.find((o) => o.id === habitSort)?.label ?? "Sort";
+
   return (
     <div className="space-y-5">
       {/* Filter pills */}
@@ -826,6 +859,84 @@ function DesktopHabits({
         ))}
       </div>
 
+      {/* Search + Sort row */}
+      <div className="flex items-center gap-3">
+        {/* Search input */}
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={habitSearch}
+            onChange={(e) => setHabitSearch(e.target.value)}
+            placeholder="Search habits…"
+            className="w-full rounded-xl border py-2 pl-9 pr-9 text-sm outline-none transition-all focus:ring-1"
+            style={
+              {
+                background: "var(--color-card)",
+                borderColor: "oklch(1 0 0 / 0.08)",
+                color: "var(--color-foreground)",
+                "--tw-ring-color": "var(--color-primary)",
+              } as React.CSSProperties
+            }
+          />
+          {habitSearch && (
+            <button
+              onClick={() => setHabitSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Sort dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setSortOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all hover:brightness-110 active:scale-95"
+            style={{
+              background: habitSort !== "default" ? "var(--color-primary)" : "var(--color-card)",
+              color:
+                habitSort !== "default"
+                  ? "var(--color-primary-foreground)"
+                  : "var(--color-muted-foreground)",
+              borderColor: habitSort !== "default" ? "var(--color-primary)" : "oklch(1 0 0 / 0.08)",
+            }}
+          >
+            <SortAsc className="size-4" />
+            {sortLabel}
+          </button>
+          {sortOpen && (
+            <div
+              className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-xl border py-1 shadow-xl"
+              style={{
+                background: "oklch(0.19 0.008 240)",
+                borderColor: "oklch(1 0 0 / 0.1)",
+              }}
+            >
+              {HABIT_SORT_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => {
+                    setHabitSort(o.id);
+                    setSortOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-[oklch(1_0_0_/_0.05)]"
+                  style={{
+                    color: habitSort === o.id ? "var(--color-primary)" : "var(--color-foreground)",
+                  }}
+                >
+                  {o.label}
+                  {habitSort === o.id && (
+                    <span className="size-1.5 rounded-full bg-[var(--color-primary)]" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Section heading */}
       <div className="flex items-baseline gap-3">
         <h2 className="font-display text-2xl text-foreground">
@@ -834,11 +945,24 @@ function DesktopHabits({
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
           {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
         </span>
+        {habitSearch && (
+          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            · matching "{habitSearch}"
+          </span>
+        )}
       </div>
 
       {/* Cards */}
       {filtered.length === 0 ? (
-        <EmptyState filter={filter} />
+        habitSearch ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center">
+            <Search className="mx-auto mb-3 size-8 text-muted-foreground opacity-40" />
+            <p className="font-display text-xl text-foreground">No results for "{habitSearch}"</p>
+            <p className="mt-1 text-sm text-muted-foreground">Try a different search term.</p>
+          </div>
+        ) : (
+          <EmptyState filter={filter} />
+        )
       ) : (
         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
           {filtered.map((h) => (
@@ -1598,6 +1722,182 @@ function DesktopProgress({
   );
 }
 
+/* ── Mobile Habits ── */
+function MobileHabits({
+  filter,
+  setFilter,
+  counts,
+  filtered,
+  toggleToday,
+  setOpenId,
+  setEditId,
+  handleDelete,
+  habitSearch,
+  setHabitSearch,
+  habitSort,
+  setHabitSort,
+}: Pick<
+  AppProps,
+  | "filter"
+  | "setFilter"
+  | "counts"
+  | "filtered"
+  | "toggleToday"
+  | "setOpenId"
+  | "setEditId"
+  | "handleDelete"
+  | "habitSearch"
+  | "setHabitSearch"
+  | "habitSort"
+  | "setHabitSort"
+>) {
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortLabel = HABIT_SORT_OPTIONS.find((o) => o.id === habitSort)?.label ?? "Sort";
+
+  return (
+    <div className="space-y-4 pb-6 pt-5">
+      {/* Status filter pills */}
+      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all active:scale-95"
+            style={
+              filter === f.id
+                ? {
+                    background: "var(--color-primary)",
+                    color: "var(--color-primary-foreground)",
+                    borderColor: "var(--color-primary)",
+                  }
+                : {
+                    borderColor: "oklch(1 0 0 / 0.08)",
+                    color: "var(--color-muted-foreground)",
+                    background: "var(--color-card)",
+                  }
+            }
+          >
+            {f.label}&nbsp;<span className="opacity-60">{counts[f.id]}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Search + Sort row */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={habitSearch}
+            onChange={(e) => setHabitSearch(e.target.value)}
+            placeholder="Search habits…"
+            className="w-full rounded-xl border py-2 pl-9 pr-8 text-sm outline-none"
+            style={{
+              background: "var(--color-card)",
+              borderColor: "oklch(1 0 0 / 0.08)",
+              color: "var(--color-foreground)",
+            }}
+          />
+          {habitSearch && (
+            <button
+              onClick={() => setHabitSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Sort button */}
+        <div className="relative">
+          <button
+            onClick={() => setSortOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all active:scale-95"
+            style={{
+              background: habitSort !== "default" ? "var(--color-primary)" : "var(--color-card)",
+              color:
+                habitSort !== "default"
+                  ? "var(--color-primary-foreground)"
+                  : "var(--color-muted-foreground)",
+              borderColor: habitSort !== "default" ? "var(--color-primary)" : "oklch(1 0 0 / 0.08)",
+            }}
+          >
+            <SortAsc className="size-4" />
+            <span className="hidden xs:inline">{sortLabel}</span>
+          </button>
+          {sortOpen && (
+            <div
+              className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-xl border py-1 shadow-xl"
+              style={{
+                background: "oklch(0.19 0.008 240)",
+                borderColor: "oklch(1 0 0 / 0.1)",
+              }}
+            >
+              {HABIT_SORT_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => {
+                    setHabitSort(o.id);
+                    setSortOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-[oklch(1_0_0_/_0.05)]"
+                  style={{
+                    color: habitSort === o.id ? "var(--color-primary)" : "var(--color-foreground)",
+                  }}
+                >
+                  {o.label}
+                  {habitSort === o.id && (
+                    <span className="size-1.5 rounded-full bg-[var(--color-primary)]" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Heading */}
+      <div>
+        <h2 className="font-display text-2xl text-foreground">
+          {FILTERS.find((f) => f.id === filter)?.label}
+        </h2>
+        <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          <span>
+            {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
+          </span>
+          {habitSearch && <span>· matching "{habitSearch}"</span>}
+        </div>
+      </div>
+
+      {/* Cards */}
+      {filtered.length === 0 ? (
+        habitSearch ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-14 text-center">
+            <Search className="mx-auto mb-3 size-7 text-muted-foreground opacity-40" />
+            <p className="font-display text-lg text-foreground">No results for "{habitSearch}"</p>
+            <p className="mt-1 text-sm text-muted-foreground">Try a different search term.</p>
+          </div>
+        ) : (
+          <EmptyState filter={filter} />
+        )
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((h) => (
+            <HabitCard
+              key={h.id}
+              habit={h}
+              onToggleToday={toggleToday}
+              onOpen={setOpenId}
+              onEdit={setEditId}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════
    MOBILE / TABLET  < lg
 ══════════════════════════════════════════════════════ */
@@ -1865,56 +2165,20 @@ function MobileApp(p: AppProps) {
 
           {/* HABITS */}
           {tab === "habits" && (
-            <div className="space-y-4 pb-6 pt-5">
-              <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-                {FILTERS.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setFilter(f.id)}
-                    className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all active:scale-95"
-                    style={
-                      filter === f.id
-                        ? {
-                            background: "var(--color-primary)",
-                            color: "var(--color-primary-foreground)",
-                            borderColor: "var(--color-primary)",
-                          }
-                        : {
-                            borderColor: "oklch(1 0 0 / 0.08)",
-                            color: "var(--color-muted-foreground)",
-                            background: "var(--color-card)",
-                          }
-                    }
-                  >
-                    {f.label}&nbsp;<span className="opacity-60">{counts[f.id]}</span>
-                  </button>
-                ))}
-              </div>
-              <div>
-                <h2 className="font-display text-2xl text-foreground">
-                  {FILTERS.find((f) => f.id === filter)?.label}
-                </h2>
-                <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
-                </div>
-              </div>
-              {filtered.length === 0 ? (
-                <EmptyState filter={filter} />
-              ) : (
-                <div className="space-y-3">
-                  {filtered.map((h) => (
-                    <HabitCard
-                      key={h.id}
-                      habit={h}
-                      onToggleToday={toggleToday}
-                      onOpen={setOpenId}
-                      onEdit={setEditId}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <MobileHabits
+              filter={p.filter}
+              setFilter={p.setFilter}
+              counts={p.counts}
+              filtered={p.filtered}
+              toggleToday={p.toggleToday}
+              setOpenId={p.setOpenId}
+              setEditId={p.setEditId}
+              handleDelete={p.handleDelete}
+              habitSearch={p.habitSearch}
+              setHabitSearch={p.setHabitSearch}
+              habitSort={p.habitSort}
+              setHabitSort={p.setHabitSort}
+            />
           )}
 
           {/* PROGRESS */}
@@ -2736,6 +3000,38 @@ function TodayHabitRow({
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Celebration ────────────────────────────────────────
+  const confetti = useConfetti();
+  const prevDoneRef = useRef(done);
+  const [glowing, setGlowing] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
+
+  useEffect(() => {
+    if (!prevDoneRef.current && done) {
+      setGlowing(true);
+      setBouncing(true);
+      confetti.trigger(h.color);
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        playCompletionSound();
+      }
+      triggerHaptic();
+    }
+    prevDoneRef.current = done;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+
+  useEffect(() => {
+    if (!glowing) return;
+    const id = setTimeout(() => setGlowing(false), 1300);
+    return () => clearTimeout(id);
+  }, [glowing]);
+
+  useEffect(() => {
+    if (!bouncing) return;
+    const id = setTimeout(() => setBouncing(false), 700);
+    return () => clearTimeout(id);
+  }, [bouncing]);
+
   // Keep note text in sync if Firestore updates come in
   useEffect(() => {
     setNoteText(existingNote);
@@ -2764,23 +3060,47 @@ function TodayHabitRow({
 
   return (
     <div
-      className="overflow-hidden rounded-2xl border transition-all"
+      className="relative overflow-hidden rounded-2xl border transition-colors"
       style={{
         borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
         background: done ? `${h.color}10` : "var(--color-card)",
-        boxShadow: "var(--shadow-soft)",
+        ["--glow-c" as string]: h.color,
+        ["--glow-c-dim" as string]: h.color + "40",
+        animation: glowing ? "row-glow 1.3s ease-out forwards" : undefined,
       }}
     >
+      {/* Confetti canvas overlay */}
+      <canvas
+        ref={confetti.canvasRef}
+        className="pointer-events-none absolute inset-0 z-10"
+        style={{ width: "100%", height: "100%" }}
+      />
+
       {/* Main row — flat div with independent clickable zones */}
       <div className="flex w-full items-center gap-3 p-4">
         {/* Checkbox button */}
         <button
+          ref={confetti.buttonRef}
           onClick={() => inRange && onToggle(h.id)}
           disabled={!inRange}
-          className="shrink-0 transition-transform active:scale-110 disabled:opacity-50"
+          className="shrink-0 disabled:opacity-50"
+          style={{
+            animation: bouncing
+              ? "btn-complete 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+              : undefined,
+          }}
         >
           {done ? (
-            <CheckCircle2 className="size-6" style={{ color: h.color }} />
+            <span
+              style={{
+                display: "inline-flex",
+                animation: bouncing
+                  ? "check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+                  : undefined,
+              }}
+            >
+              <CheckCircle2 className="size-6" style={{ color: h.color }} />
+            </span>
           ) : (
             <Circle className="size-6 text-muted-foreground" />
           )}
