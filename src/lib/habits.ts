@@ -62,6 +62,9 @@ export const DATE_PRESETS = [
   { label: "30 days", days: 30 },
   { label: "60 days", days: 60 },
   { label: "90 days", days: 90 },
+  { label: "120 days", days: 120 },
+  { label: "180 Days", days: 180 },
+  { label: "365 Days", days: 365 },
 ] as const;
 
 export const COLORS = [

@@ -161,6 +161,15 @@
 }
 
 @layer base {
+  * {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  ::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+
   /* Mobile: full-height layout, prevent overscroll */
   html {
     height: 100%;
@@ -183,15 +192,6 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
-}
-
-html {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-
-html::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
 }
 
 /* ::-webkit-scrollbar {

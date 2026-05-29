@@ -36,6 +36,7 @@ export function EditHabitDialog({ habit, onClose }: Props) {
   const [plan, setPlan] = useState("");
   const [start, setStart] = useState<Date | undefined>();
   const [end, setEnd] = useState<Date | undefined>();
+  const [durationDays, setDurationDays] = useState(30);
   const [color, setColor] = useState(COLORS[0]);
   const [icon, setIcon] = useState<string>(DEFAULT_ICON);
   const [saving, setSaving] = useState(false);
@@ -57,6 +58,12 @@ export function EditHabitDialog({ habit, onClose }: Props) {
     setErrors({});
   }, [habit]);
 
+  useEffect(() => {
+    if (!start || !end) return;
+    const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    setDurationDays(Math.max(1, diff));
+  }, [start, end]);
+
   const submit = async () => {
     if (!habit || !start || !end) return;
     const result = habitSchema.safeParse({ name, description, plan, start, end, color, icon });
@@ -77,6 +84,15 @@ export function EditHabitDialog({ habit, onClose }: Props) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDurationChange = (value: number) => {
+    const days = Math.min(365, Math.max(1, value));
+    setDurationDays(days);
+    if (!start) return;
+    const newEnd = new Date(start);
+    newEnd.setDate(start.getDate() + days - 1);
+    setEnd(newEnd);
   };
 
   const formBody = (
@@ -110,7 +126,13 @@ export function EditHabitDialog({ habit, onClose }: Props) {
         <DatePickerWithPresets
           label="Start"
           value={start}
-          onChange={setStart}
+          onChange={(date) => {
+            setStart(date);
+            if (!date) return;
+            const newEnd = new Date(date);
+            newEnd.setDate(date.getDate() + durationDays - 1);
+            setEnd(newEnd);
+          }}
           error={errors.start}
         />
         <DatePickerWithPresets
@@ -121,6 +143,17 @@ export function EditHabitDialog({ habit, onClose }: Props) {
           error={errors.end}
         />
       </div>
+      <Field label="Duration (days)">
+        <Input
+          type="number"
+          min={1}
+          max={355}
+          value={durationDays}
+          onChange={(e) => handleDurationChange(Number(e.target.value) || 1)}
+          placeholder="30"
+          className="h-11 rounded-xl text-base"
+        />
+      </Field>
       <Field label="Icon">
         <div className="grid grid-cols-8 gap-1.5 pt-1">
           {HABIT_ICONS.map((iconName) => {

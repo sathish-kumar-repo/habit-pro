@@ -20,8 +20,8 @@ export function DatePickerWithPresets({ value, onChange, label, minDate, error }
   const [open, setOpen] = React.useState(false);
 
   const applyPreset = (days: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
+    const d = new Date(minDate ?? new Date());
+    d.setDate(d.getDate() + Math.max(0, days - 1));
     d.setHours(0, 0, 0, 0);
     onChange(d);
     setOpen(false);

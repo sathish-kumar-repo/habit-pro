@@ -34,6 +34,10 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [plan, setPlan] = useState("");
+  const [color, setColor] = useState(COLORS[0]);
+  const [icon, setIcon] = useState<string>(DEFAULT_ICON);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [start, setStart] = useState<Date | undefined>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -41,14 +45,17 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
   });
   const [end, setEnd] = useState<Date | undefined>(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 30);
+    d.setDate(d.getDate() + 29); // 30 total days including today
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [color, setColor] = useState(COLORS[0]);
-  const [icon, setIcon] = useState<string>(DEFAULT_ICON);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [durationDays, setDurationDays] = useState(30);
+
+  useEffect(() => {
+    if (!start || !end) return;
+    const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    setDurationDays(Math.max(1, diff));
+  }, [start, end]);
 
   const reset = () => {
     setName("");
@@ -58,7 +65,7 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
     d.setHours(0, 0, 0, 0);
     setStart(d);
     const e = new Date();
-    e.setDate(e.getDate() + 30);
+    e.setDate(e.getDate() + 29);
     e.setHours(0, 0, 0, 0);
     setEnd(e);
     setColor(COLORS[0]);
@@ -99,6 +106,15 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
     }
   };
 
+  const handleDurationChange = (value: number) => {
+    const days = Math.min(365, Math.max(1, value));
+    setDurationDays(days);
+    if (!start) return;
+    const newEnd = new Date(start);
+    newEnd.setDate(start.getDate() + days - 1);
+    setEnd(newEnd);
+  };
+
   const formBody = (
     <div className="space-y-4">
       <Field label="Habit name" error={errors.name}>
@@ -131,7 +147,13 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
         <DatePickerWithPresets
           label="Start"
           value={start}
-          onChange={setStart}
+          onChange={(date) => {
+            setStart(date);
+            if (!date) return;
+            const newEnd = new Date(date);
+            newEnd.setDate(date.getDate() + durationDays - 1);
+            setEnd(newEnd);
+          }}
           error={errors.start}
         />
         <DatePickerWithPresets
@@ -142,6 +164,17 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
           error={errors.end}
         />
       </div>
+      <Field label="Duration (days)">
+        <Input
+          type="number"
+          min={1}
+          max={365}
+          value={durationDays}
+          onChange={(e) => handleDurationChange(Number(e.target.value) || 1)}
+          placeholder="30"
+          className="h-11 rounded-xl text-base"
+        />
+      </Field>
       <Field label="Icon">
         <div className="grid grid-cols-8 gap-1.5 pt-1">
           {HABIT_ICONS.map((iconName) => {
@@ -280,7 +313,7 @@ export function AddHabitDialog({ open, onOpenChange }: Props) {
 
         {/* Body */}
         <div
-          className="flex-1 overflow-y-auto px-5 py-4 overscroll-contain scrollbar-none"
+          className="flex-1 overflow-y-auto px-5 py-4 overscroll-contain"
           style={{
             WebkitOverflowScrolling: "touch",
           }}
