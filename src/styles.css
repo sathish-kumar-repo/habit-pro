@@ -270,6 +270,40 @@
   }
 }
 
+@keyframes celebrate-badge {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.75);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.08);
+  }
+  32% {
+    transform: translateY(0px) scale(0.97);
+  }
+  50%,
+  80% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+}
+
+@keyframes card-settle {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0.45;
+    transform: translateY(14px);
+  }
+}
+
 /* ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

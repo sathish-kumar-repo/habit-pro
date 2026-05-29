@@ -379,10 +379,23 @@ function useAppData() {
 
   const handleDelete = (id: string) => void deleteHabitFs(id);
   const toggleToday = (id: string) => {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate > todayDate) return;
+
     const h = habits.find((h) => h.id === id);
     if (h) void toggleHabitDay(h, selectedDateKey);
   };
   const toggleDay = (id: string, day: string) => {
+    const targetDate = new Date(day);
+    targetDate.setHours(0, 0, 0, 0);
+
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    if (targetDate > todayDate) return;
+
     const h = habits.find((h) => h.id === id);
     if (h) void toggleHabitDay(h, day);
   };
@@ -538,6 +551,7 @@ function DateStrip({
           return (
             <button
               key={d.key}
+              disabled={d.isFuture}
               onClick={() => setSelectedDate(d.date)}
               className="flex flex-1 min-w-[40px] flex-col items-center gap-1 rounded-2xl py-2.5 px-1 transition-all active:scale-95"
               style={{
@@ -918,38 +932,33 @@ function DesktopToday({
               {todayHabits.length} {todayHabits.length === 1 ? "habit" : "habits"}
             </span>
           </div>
-          {todayHabits.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center">
-              <p className="font-display text-xl text-foreground">
-                {isFuture ? "No habits planned for this day." : "No habits tracked this day."}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isFuture
-                  ? "Create a habit that includes this date."
-                  : "Habits are tracked from their start date."}
-              </p>
-              {isSelectedToday && (
-                <button
-                  onClick={() => setAddOpen(true)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
-                >
-                  <Plus className="size-4" /> New habit
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-2.5 xl:grid-cols-2">
-              {todayHabits.map((h) => (
-                <TodayHabitRow
-                  key={h.id}
-                  habit={h}
-                  dateKey={selectedDateKey}
-                  onToggle={toggleToday}
-                  onSaveNote={saveNote}
-                />
-              ))}
-            </div>
-          )}
+          <TodayHabitList
+            habits={todayHabits}
+            dateKey={selectedDateKey}
+            onToggle={toggleToday}
+            onSaveNote={saveNote}
+            gridClass="grid gap-2.5 xl:grid-cols-2"
+            emptySlot={
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center">
+                <p className="font-display text-xl text-foreground">
+                  {isFuture ? "No habits planned for this day." : "No habits tracked this day."}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isFuture
+                    ? "Create a habit that includes this date."
+                    : "Habits are tracked from their start date."}
+                </p>
+                {isSelectedToday && (
+                  <button
+                    onClick={() => setAddOpen(true)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+                  >
+                    <Plus className="size-4" /> New habit
+                  </button>
+                )}
+              </div>
+            }
+          />
         </div>
       </div>
 
@@ -2425,34 +2434,29 @@ function MobileApp(p: AppProps) {
                     {todayHabits.length} {todayHabits.length === 1 ? "habit" : "habits"}
                   </span>
                 </div>
-                {todayHabits.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
-                    <p className="font-display text-lg text-foreground">No habits this day.</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Select today or a date with active habits.
-                    </p>
-                    {p.selectedDateKey === fmtDate(new Date()) && (
-                      <button
-                        onClick={() => setAddOpen(true)}
-                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all active:scale-95"
-                      >
-                        <Plus className="size-4" /> New habit
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {todayHabits.map((h) => (
-                      <TodayHabitRow
-                        key={h.id}
-                        habit={h}
-                        dateKey={p.selectedDateKey}
-                        onToggle={toggleToday}
-                        onSaveNote={saveNote}
-                      />
-                    ))}
-                  </div>
-                )}
+                <TodayHabitList
+                  habits={todayHabits}
+                  dateKey={p.selectedDateKey}
+                  onToggle={toggleToday}
+                  onSaveNote={saveNote}
+                  gridClass="grid gap-2"
+                  emptySlot={
+                    <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
+                      <p className="font-display text-lg text-foreground">No habits this day.</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Select today or a date with active habits.
+                      </p>
+                      {p.selectedDateKey === fmtDate(new Date()) && (
+                        <button
+                          onClick={() => setAddOpen(true)}
+                          className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all active:scale-95"
+                        >
+                          <Plus className="size-4" /> New habit
+                        </button>
+                      )}
+                    </div>
+                  }
+                />
               </div>
 
               {/* Weekly mini chart */}
@@ -3329,52 +3333,147 @@ function EmptyState({ filter }: { filter: FilterId }) {
   );
 }
 
-/* ─── TodayHabitRow — shared check-off card with inline note editor ─── */
+/* ─── TodayHabitList — manages celebration position-locking ─── */
+function TodayHabitList({
+  habits,
+  dateKey,
+  onToggle,
+  onSaveNote,
+  emptySlot,
+  gridClass = "grid gap-2.5",
+}: {
+  habits: Habit[];
+  dateKey: string;
+  onToggle: (id: string) => void;
+  onSaveNote: (id: string, note: string) => void;
+  emptySlot?: React.ReactNode;
+  gridClass?: string;
+}) {
+  const [celebratingIds, setCelebratingIds] = useState<Set<string>>(new Set());
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+
+  // When dateKey changes (user switches date), clear all celebration state immediately
+  useEffect(() => {
+    setCelebratingIds(new Set());
+    setExitingIds(new Set());
+  }, [dateKey]);
+
+  const handleToggle = (id: string) => {
+    const h = habits.find((h) => h.id === id);
+    if (!h) return;
+    // Determine direction before calling toggle (Firestore hasn't responded yet)
+    const completing = !(h.track[dateKey]?.done ?? false);
+    onToggle(id);
+    if (completing) {
+      setCelebratingIds((prev) => new Set([...prev, id]));
+      // After 1.1s: start exit animation (card slides down)
+      const exitTimer = setTimeout(() => {
+        setCelebratingIds((prev) => {
+          const n = new Set(prev);
+          n.delete(id);
+          return n;
+        });
+        setExitingIds((prev) => new Set([...prev, id]));
+        // After 380ms: let the list re-sort naturally
+        const clearTimer = setTimeout(() => {
+          setExitingIds((prev) => {
+            const n = new Set(prev);
+            n.delete(id);
+            return n;
+          });
+        }, 380);
+        return () => clearTimeout(clearTimer);
+      }, 1100);
+      return () => clearTimeout(exitTimer);
+    }
+  };
+
+  if (habits.length === 0) return <>{emptySlot}</>;
+
+  // Split into buckets: incomplete → celebrating → exiting → completed
+  const incomplete = habits.filter(
+    (h) => !h.track[dateKey]?.done && !celebratingIds.has(h.id) && !exitingIds.has(h.id),
+  );
+  const celebrating = habits.filter((h) => celebratingIds.has(h.id));
+  const exiting = habits.filter((h) => exitingIds.has(h.id));
+  const completed = habits.filter(
+    (h) => h.track[dateKey]?.done && !celebratingIds.has(h.id) && !exitingIds.has(h.id),
+  );
+  const ordered = [...incomplete, ...celebrating, ...exiting, ...completed];
+
+  return (
+    <div className={gridClass}>
+      {ordered.map((h) => (
+        <TodayHabitRow
+          key={h.id}
+          habit={h}
+          dateKey={dateKey}
+          onToggle={handleToggle}
+          onSaveNote={onSaveNote}
+          isJustCompleted={celebratingIds.has(h.id)}
+          isExiting={exitingIds.has(h.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ─── TodayHabitRow — check-off card with clean celebration architecture ─── */
 function TodayHabitRow({
   habit: h,
   dateKey,
   onToggle,
   onSaveNote,
+  isJustCompleted = false,
+  isExiting = false,
 }: {
   habit: Habit;
   dateKey: string;
   onToggle: (id: string) => void;
   onSaveNote: (id: string, note: string) => void;
+  isJustCompleted?: boolean;
+  isExiting?: boolean;
 }) {
   const entry = h.track[dateKey];
-  const done = entry?.done ?? false;
+  const firestoreDone = entry?.done ?? false;
   const inRange = entry !== undefined;
   const existingNote = entry?.note ?? "";
   const { pct } = progress(h);
 
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteText, setNoteText] = useState(existingNote);
-  const [saving, setSaving] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // ── Optimistic local done state ─────────────────────────
+  // Separates completion state (Firestore) from display state (optimistic).
+  // Celebrations fire ONLY in the click handler — never in useEffect watching done.
+  const [localDone, setLocalDone] = useState(firestoreDone);
 
-  // ── Celebration ────────────────────────────────────────
+  // Sync from Firestore when data changes (date switch, page load, remote update).
+  // This deliberately does NOT trigger any celebration side-effects.
+  const firestoreDoneRef = useRef(firestoreDone);
+  useEffect(() => {
+    if (firestoreDone !== firestoreDoneRef.current) {
+      firestoreDoneRef.current = firestoreDone;
+      setLocalDone(firestoreDone);
+    }
+  }, [firestoreDone]);
+
+  // Also sync whenever the dateKey changes (user switched to a different day)
+  const prevDateKeyRef = useRef(dateKey);
+  useEffect(() => {
+    if (dateKey !== prevDateKeyRef.current) {
+      prevDateKeyRef.current = dateKey;
+      setLocalDone(firestoreDone);
+    }
+  }, [dateKey, firestoreDone]);
+
+  const done = localDone;
+
+  // ── Celebration state (UI-only, never persisted) ────────
   const confetti = useConfetti();
-  const prevDoneRef = useRef(done);
   const [glowing, setGlowing] = useState(false);
   const [bouncing, setBouncing] = useState(false);
 
   useEffect(() => {
-    if (!prevDoneRef.current && done) {
-      setGlowing(true);
-      setBouncing(true);
-      confetti.trigger(h.color);
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        playCompletionSound();
-      }
-      triggerHaptic();
-    }
-    prevDoneRef.current = done;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
-
-  useEffect(() => {
     if (!glowing) return;
-    const id = setTimeout(() => setGlowing(false), 1300);
+    const id = setTimeout(() => setGlowing(false), 1350);
     return () => clearTimeout(id);
   }, [glowing]);
 
@@ -3384,10 +3483,35 @@ function TodayHabitRow({
     return () => clearTimeout(id);
   }, [bouncing]);
 
-  // Keep note text in sync if Firestore updates come in
+  // ── Note editor ─────────────────────────────────────────
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState(existingNote);
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => {
     setNoteText(existingNote);
   }, [existingNote]);
+
+  // ── Handlers ────────────────────────────────────────────
+  const handleToggle = () => {
+    if (!inRange) return;
+    const completing = !done;
+    // Optimistic update: instantly reflect in UI
+    setLocalDone(completing);
+    // Persist to Firestore
+    onToggle(h.id);
+    // Celebrations fire ONLY here — never in a useEffect watching done
+    if (completing) {
+      setGlowing(true);
+      setBouncing(true);
+      confetti.trigger(h.color);
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        playCompletionSound();
+      }
+      triggerHaptic();
+    }
+  };
 
   const toggleNote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -3409,16 +3533,21 @@ function TodayHabitRow({
   };
 
   const hasNote = existingNote.trim().length > 0;
+  const badgeDuration = 1100 + 380; // celebrate + exit phases
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border transition-colors"
+      className="relative overflow-hidden rounded-2xl border transition-colors duration-300"
       style={{
         borderColor: done ? `${h.color}40` : "oklch(1 0 0 / 0.07)",
         background: done ? `${h.color}10` : "var(--color-card)",
         ["--glow-c" as string]: h.color,
         ["--glow-c-dim" as string]: h.color + "40",
-        animation: glowing ? "row-glow 1.3s ease-out forwards" : undefined,
+        animation: glowing
+          ? "row-glow 1.35s ease-out forwards"
+          : isExiting
+            ? `card-settle 380ms ease-in forwards`
+            : undefined,
       }}
     >
       {/* Confetti canvas overlay */}
@@ -3428,12 +3557,27 @@ function TodayHabitRow({
         style={{ width: "100%", height: "100%" }}
       />
 
-      {/* Main row — flat div with independent clickable zones */}
+      {/* "Completed" celebration badge */}
+      {isJustCompleted && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-1"
+          style={{ animation: `celebrate-badge ${badgeDuration}ms ease-in-out forwards` }}
+        >
+          <span
+            className="flex items-center gap-1 rounded-full px-3 py-0.5 text-[11px] font-semibold text-white shadow-lg"
+            style={{ background: h.color, boxShadow: `0 2px 12px ${h.color}60` }}
+          >
+            <CheckCircle2 className="size-3" /> Completed
+          </span>
+        </div>
+      )}
+
+      {/* Main row */}
       <div className="flex w-full items-center gap-3 p-4">
         {/* Checkbox button */}
         <button
           ref={confetti.buttonRef}
-          onClick={() => inRange && onToggle(h.id)}
+          onClick={handleToggle}
           disabled={!inRange}
           className="shrink-0 disabled:opacity-50"
           style={{
@@ -3457,10 +3601,11 @@ function TodayHabitRow({
             <Circle className="size-6 text-muted-foreground" />
           )}
         </button>
-        {/* Name + description — click area for toggling */}
-        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => inRange && onToggle(h.id)}>
+
+        {/* Name + description */}
+        <div className="min-w-0 flex-1 cursor-pointer" onClick={handleToggle}>
           <div
-            className="truncate font-medium text-foreground"
+            className="truncate font-medium text-foreground transition-all duration-200"
             style={{ textDecoration: done ? "line-through" : "none", opacity: done ? 0.55 : 1 }}
           >
             {h.name}
@@ -3469,7 +3614,8 @@ function TodayHabitRow({
             <div className="mt-0.5 truncate text-xs text-muted-foreground">{h.description}</div>
           )}
         </div>
-        {/* Right side — note button + progress */}
+
+        {/* Right side — note + progress */}
         <div className="flex shrink-0 items-center gap-2">
           {inRange && (
             <button
@@ -3498,7 +3644,7 @@ function TodayHabitRow({
             </div>
             <div className="mt-0.5 h-1 w-12 overflow-hidden rounded-full bg-[oklch(1_0_0_/_0.08)]">
               <div
-                className="h-full rounded-full transition-all"
+                className="h-full rounded-full transition-all duration-500"
                 style={{ width: `${pct * 100}%`, background: h.color }}
               />
             </div>
@@ -3506,14 +3652,15 @@ function TodayHabitRow({
         </div>
       </div>
 
-      {/* Inline note editor — slides open */}
+      {/* Inline note editor */}
       {noteOpen && (
         <div
           className="border-t px-4 pb-4 pt-3"
           style={{ borderColor: `${h.color}25`, background: `${h.color}08` }}
         >
           <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            <StickyNote className="size-3" style={{ color: h.color }} /> Note for today
+            <StickyNote className="size-3" style={{ color: h.color }} /> Note for{" "}
+            {dateKey === today() ? "today" : "this day"}
           </div>
           <textarea
             ref={textareaRef}
