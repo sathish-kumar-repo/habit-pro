@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   Zap,
   ChevronRight,
+  ChevronLeft,
   Activity,
   CalendarCheck,
   Award,
@@ -87,11 +88,18 @@ function useAppData() {
   const [progressSort, setProgressSort] = useState<ProgressSort>("pct");
   const [habitSearch, setHabitSearch] = useState("");
   const [habitSort, setHabitSort] = useState<HabitSort>("default");
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
 
   useEffect(() => {
     const u = subscribeHabits(setHabits);
     return u;
   }, []);
+
+  const selectedDateKey = useMemo(() => fmtDate(selectedDate), [selectedDate]);
 
   const counts = useMemo(() => {
     const c: Record<FilterId, number> = { ongoing: 0, upcoming: 0, finished: 0, pending: 0 };
@@ -353,21 +361,26 @@ function useAppData() {
   }, [habits]);
 
   const todayHabits = useMemo(() => {
-    const t = today();
     return habits
-      .filter((h) => classify(h) === "ongoing")
+      .filter((h) => h.track[selectedDateKey] !== undefined)
       .sort((a, b) => {
-        const ad = a.track[t]?.done ? 1 : 0,
-          bd = b.track[t]?.done ? 1 : 0;
+        const ad = a.track[selectedDateKey]?.done ? 1 : 0,
+          bd = b.track[selectedDateKey]?.done ? 1 : 0;
         if (ad !== bd) return ad - bd;
         return b.createdAt - a.createdAt;
       });
-  }, [habits]);
+  }, [habits, selectedDateKey]);
+
+  const statsForSelectedDate = useMemo(() => {
+    const active = todayHabits.length;
+    const done = todayHabits.filter((h) => h.track[selectedDateKey]?.done).length;
+    return { active, done };
+  }, [todayHabits, selectedDateKey]);
 
   const handleDelete = (id: string) => void deleteHabitFs(id);
   const toggleToday = (id: string) => {
     const h = habits.find((h) => h.id === id);
-    if (h) void toggleHabitDay(h, today());
+    if (h) void toggleHabitDay(h, selectedDateKey);
   };
   const toggleDay = (id: string, day: string) => {
     const h = habits.find((h) => h.id === id);
@@ -375,7 +388,7 @@ function useAppData() {
   };
   const saveNote = (id: string, note: string) => {
     const h = habits.find((h) => h.id === id);
-    if (h) void setHabitNote(h, today(), note);
+    if (h) void setHabitNote(h, selectedDateKey, note);
   };
   const openHabit = habits.find((h) => h.id === openId) ?? null;
   const editHabit = habits.find((h) => h.id === editId) ?? null;
@@ -418,7 +431,185 @@ function useAppData() {
     personalRecords,
     consistencyScore,
     perHabitExtended,
+    selectedDate,
+    setSelectedDate,
+    selectedDateKey,
+    statsForSelectedDate,
   };
+}
+
+/* ─── DateStrip — horizontally scrollable date selector ─── */
+function DateStrip({
+  habits,
+  selectedDate,
+  setSelectedDate,
+}: {
+  habits: Habit[];
+  selectedDate: Date;
+  setSelectedDate: (d: Date) => void;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const days = useMemo(() => {
+    const weekStart = new Date(todayDate);
+    weekStart.setDate(todayDate.getDate() - todayDate.getDay() + weekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const key = fmtDate(d);
+      let done = 0,
+        total = 0;
+      habits.forEach((h) => {
+        const e = h.track[key];
+        if (e) {
+          total++;
+          if (e.done) done++;
+        }
+      });
+      const isToday = d.getTime() === todayDate.getTime();
+      const isFuture = d > todayDate;
+      const isSelected = fmtDate(d) === fmtDate(selectedDate);
+      return { date: d, key, done, total, isToday, isFuture, isSelected };
+    });
+  }, [habits, todayDate, weekOffset, selectedDate]);
+
+  const weekLabel = useMemo(() => {
+    const first = days[0].date;
+    const last = days[6].date;
+    if (first.getMonth() === last.getMonth()) {
+      return first.toLocaleDateString("en", { month: "long", year: "numeric" });
+    }
+    return `${first.toLocaleDateString("en", { month: "short" })} – ${last.toLocaleDateString("en", { month: "short", year: "numeric" })}`;
+  }, [days]);
+
+  const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
+
+  return (
+    <div className="select-none">
+      {/* Month label + nav */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+          {weekLabel}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setWeekOffset((w) => w - 1)}
+            className="flex size-6 items-center justify-center rounded-lg transition-all hover:bg-[oklch(1_0_0_/_0.07)] active:scale-90"
+            style={{ color: "var(--color-muted-foreground)" }}
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+          {weekOffset !== 0 && (
+            <button
+              onClick={() => {
+                setWeekOffset(0);
+                const d = new Date();
+                d.setHours(0, 0, 0, 0);
+                setSelectedDate(d);
+              }}
+              className="rounded-md px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.15em] transition-all hover:bg-[oklch(1_0_0_/_0.07)]"
+              style={{ color: "var(--color-primary)" }}
+            >
+              Today
+            </button>
+          )}
+          <button
+            onClick={() => setWeekOffset((w) => w + 1)}
+            className="flex size-6 items-center justify-center rounded-lg transition-all hover:bg-[oklch(1_0_0_/_0.07)] active:scale-90"
+            style={{ color: "var(--color-muted-foreground)" }}
+          >
+            <ChevronRight className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Date pills */}
+      <div ref={scrollRef} className="no-scrollbar flex gap-1.5 overflow-x-auto pb-1">
+        {days.map((d, idx) => {
+          const completionPct = d.total > 0 ? d.done / d.total : 0;
+          const allDone = d.total > 0 && d.done === d.total;
+          return (
+            <button
+              key={d.key}
+              onClick={() => setSelectedDate(d.date)}
+              className="flex flex-1 min-w-[40px] flex-col items-center gap-1 rounded-2xl py-2.5 px-1 transition-all active:scale-95"
+              style={{
+                background: d.isSelected
+                  ? "var(--color-primary)"
+                  : d.isToday
+                    ? "oklch(1 0 0 / 0.06)"
+                    : "oklch(1 0 0 / 0.03)",
+                opacity: d.isFuture && !d.isSelected ? 0.55 : 1,
+                boxShadow: d.isSelected ? "0 4px 16px oklch(0.62 0.2 158 / 0.35)" : undefined,
+              }}
+            >
+              {/* Day initial */}
+              <span
+                className="font-mono text-[9px] uppercase tracking-[0.1em]"
+                style={{
+                  color: d.isSelected ? "oklch(1 0 0 / 0.75)" : "var(--color-muted-foreground)",
+                }}
+              >
+                {DAY_NAMES[idx]}
+              </span>
+
+              {/* Date number */}
+              <span
+                className="font-display text-lg leading-none"
+                style={{
+                  color: d.isSelected
+                    ? "white"
+                    : d.isToday
+                      ? "var(--color-primary)"
+                      : "var(--color-foreground)",
+                  fontWeight: d.isToday || d.isSelected ? 700 : 500,
+                }}
+              >
+                {d.date.getDate()}
+              </span>
+
+              {/* Completion indicator */}
+              {d.total > 0 ? (
+                <div
+                  className="relative h-1 w-5 overflow-hidden rounded-full"
+                  style={{
+                    background: d.isSelected ? "oklch(1 0 0 / 0.25)" : "oklch(1 0 0 / 0.08)",
+                  }}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${completionPct * 100}%`,
+                      background: d.isSelected
+                        ? "white"
+                        : allDone
+                          ? "var(--color-primary)"
+                          : "oklch(0.75 0.15 158 / 0.8)",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="h-1 w-1.5 rounded-full"
+                  style={{
+                    background:
+                      d.isToday && !d.isSelected ? "var(--color-primary)" : "oklch(1 0 0 / 0.12)",
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* ─── root ───────────────────────────────────── */
@@ -582,11 +773,23 @@ function DesktopApp(p: AppProps) {
         >
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              {new Date().toLocaleDateString("en", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
+              {tab === "today"
+                ? p.selectedDateKey === fmtDate(new Date())
+                  ? new Date().toLocaleDateString("en", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  : p.selectedDate.toLocaleDateString("en", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })
+                : new Date().toLocaleDateString("en", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  })}
             </div>
             <h1 className="mt-0.5 font-display text-2xl leading-none text-foreground xl:text-3xl">
               {{ today: "Today's Focus", habits: "My Habits", progress: "My Progress" }[tab]}
@@ -630,65 +833,120 @@ function DesktopApp(p: AppProps) {
 }
 
 /* ── Desktop Today ── */
-function DesktopToday({ stats, todayHabits, rollup, toggleToday, saveNote, setAddOpen }: AppProps) {
-  const todayPct = stats.active ? stats.doneToday / stats.active : 0;
+function DesktopToday({
+  stats,
+  habits,
+  todayHabits,
+  rollup,
+  toggleToday,
+  saveNote,
+  setAddOpen,
+  selectedDate,
+  setSelectedDate,
+  selectedDateKey,
+  statsForSelectedDate,
+}: AppProps) {
+  const selPct = statsForSelectedDate.active
+    ? statsForSelectedDate.done / statsForSelectedDate.active
+    : 0;
   const r = 52,
     circ = 2 * Math.PI * r,
-    dashOff = circ * (1 - todayPct);
+    dashOff = circ * (1 - selPct);
+
+  const isSelectedToday = selectedDateKey === fmtDate(new Date());
+  const isFuture =
+    selectedDate >
+    (() => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
+
+  const dateLabel = isSelectedToday
+    ? "Today"
+    : selectedDate.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" });
+
+  const headingText = isFuture
+    ? statsForSelectedDate.active > 0
+      ? `${statsForSelectedDate.active} habit${statsForSelectedDate.active !== 1 ? "s" : ""} planned`
+      : "Nothing planned yet"
+    : statsForSelectedDate.done === statsForSelectedDate.active && statsForSelectedDate.active > 0
+      ? "All done! 🎉"
+      : statsForSelectedDate.active === 0
+        ? "No habits this day"
+        : `${statsForSelectedDate.active - statsForSelectedDate.done} left`;
 
   return (
     <div className="grid h-full gap-5 xl:grid-cols-[1fr_340px]">
-      {/* Left — check-off list */}
+      {/* Left — date strip + check-off list */}
       <div className="flex flex-col gap-5">
-        {/* Greeting */}
+        {/* Date strip card */}
         <div
-          className="rounded-2xl border border-border bg-card p-6"
+          className="rounded-2xl border border-border bg-card p-5"
           style={{ boxShadow: "var(--shadow-soft)" }}
         >
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-            {new Date().toLocaleDateString("en", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
+          <DateStrip
+            habits={habits}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+          />
+          {/* Dynamic heading below strip */}
+          <div className="mt-4 border-t border-[oklch(1_0_0_/_0.06)] pt-4">
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+              {dateLabel}
+            </div>
+            <h2 className="mt-1 font-display text-2xl text-foreground xl:text-3xl">
+              {headingText}
+            </h2>
+            {statsForSelectedDate.active > 0 && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {statsForSelectedDate.done} of {statsForSelectedDate.active} completed
+              </p>
+            )}
           </div>
-          <h2 className="mt-1 font-display text-3xl text-foreground xl:text-4xl">
-            {stats.doneToday === stats.active && stats.active > 0
-              ? "All done today! 🎉"
-              : stats.active === 0
-                ? "Start your first habit"
-                : `${stats.active - stats.doneToday} habit${stats.active - stats.doneToday !== 1 ? "s" : ""} left today`}
-          </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {stats.active > 0
-              ? `${stats.doneToday} of ${stats.active} completed`
-              : "Create a habit to start tracking your progress."}
-          </p>
         </div>
 
         {/* Habit checklist */}
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-xl text-foreground">Today's habits</h3>
+            <h3 className="font-display text-xl text-foreground">
+              {isSelectedToday
+                ? "Today's habits"
+                : `${selectedDate.toLocaleDateString("en", { weekday: "long" })}'s habits`}
+            </h3>
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              {todayHabits.length} active
+              {todayHabits.length} {todayHabits.length === 1 ? "habit" : "habits"}
             </span>
           </div>
           {todayHabits.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center">
-              <p className="font-display text-xl text-foreground">No active habits yet.</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create one to start tracking.</p>
-              <button
-                onClick={() => setAddOpen(true)}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
-              >
-                <Plus className="size-4" /> New habit
-              </button>
+              <p className="font-display text-xl text-foreground">
+                {isFuture ? "No habits planned for this day." : "No habits tracked this day."}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isFuture
+                  ? "Create a habit that includes this date."
+                  : "Habits are tracked from their start date."}
+              </p>
+              {isSelectedToday && (
+                <button
+                  onClick={() => setAddOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+                >
+                  <Plus className="size-4" /> New habit
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid gap-2.5 xl:grid-cols-2">
               {todayHabits.map((h) => (
-                <TodayHabitRow key={h.id} habit={h} onToggle={toggleToday} onSaveNote={saveNote} />
+                <TodayHabitRow
+                  key={h.id}
+                  habit={h}
+                  dateKey={selectedDateKey}
+                  onToggle={toggleToday}
+                  onSaveNote={saveNote}
+                />
               ))}
             </div>
           )}
@@ -697,13 +955,13 @@ function DesktopToday({ stats, todayHabits, rollup, toggleToday, saveNote, setAd
 
       {/* Right — ring + weekly chart */}
       <div className="flex flex-col gap-5">
-        {/* Big ring card */}
+        {/* Ring card */}
         <div
           className="rounded-2xl border border-border bg-card p-6"
           style={{ boxShadow: "var(--shadow-soft)" }}
         >
           <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Today's progress
+            {isSelectedToday ? "Today's progress" : "Day's progress"}
           </div>
           <div className="my-5 flex justify-center">
             <div className="relative">
@@ -732,9 +990,11 @@ function DesktopToday({ stats, todayHabits, rollup, toggleToday, saveNote, setAd
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="font-display text-4xl leading-none text-foreground">
-                  {stats.doneToday}
+                  {statsForSelectedDate.done}
                 </span>
-                <span className="font-mono text-sm text-muted-foreground">/{stats.active}</span>
+                <span className="font-mono text-sm text-muted-foreground">
+                  /{statsForSelectedDate.active}
+                </span>
                 <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
                   done
                 </span>
@@ -779,30 +1039,71 @@ function DesktopToday({ stats, todayHabits, rollup, toggleToday, saveNote, setAd
               const ratio = d.total ? d.done / d.total : 0;
               const h = Math.max(6, ratio * 100);
               const isToday = i === rollup.length - 1;
+              const isSelDay = d.key === selectedDateKey;
               return (
-                <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
+                <button
+                  key={d.key}
+                  onClick={() => {
+                    const dt = new Date(
+                      d.key
+                        .split("-")
+                        .map(Number)
+                        .reduce((acc, n, i) => {
+                          if (i === 0) return new Date(n, 0, 1);
+                          if (i === 1) {
+                            acc.setMonth(n - 1);
+                            return acc;
+                          }
+                          acc.setDate(n);
+                          return acc;
+                        }, new Date()),
+                    );
+                    setSelectedDate(dt);
+                  }}
+                  className="flex flex-1 flex-col items-center gap-1.5 transition-all active:scale-95"
+                >
                   <div className="font-mono text-[9px] tabular-nums text-muted-foreground">
                     {d.done}
                   </div>
                   <div className="relative w-full" style={{ height: 100 }}>
                     <div
-                      className="absolute inset-x-1 bottom-0 rounded-md bg-[oklch(1_0_0_/_0.04)]"
-                      style={{ height: "100%" }}
-                    />
-                    <div
-                      className="absolute inset-x-1 bottom-0 rounded-md transition-all"
+                      className="absolute inset-x-1 bottom-0 rounded-md"
                       style={{
-                        height: h,
-                        background: isToday
-                          ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
-                          : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
+                        height: "100%",
+                        background: isSelDay ? "oklch(1 0 0 / 0.07)" : "oklch(1 0 0 / 0.04)",
                       }}
                     />
+                    <div
+                      className="absolute inset-x-1 bottom-0 rounded-md transition-all duration-500"
+                      style={{
+                        height: h,
+                        background: isSelDay
+                          ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
+                          : isToday
+                            ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
+                            : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
+                        opacity: isSelDay ? 1 : isToday ? 0.7 : 1,
+                      }}
+                    />
+                    {isSelDay && (
+                      <div className="absolute inset-x-0 bottom-0 -mb-1 flex justify-center">
+                        <div
+                          className="h-0.5 w-3 rounded-full"
+                          style={{ background: "var(--color-primary)" }}
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                  <div
+                    className="font-mono text-[10px] uppercase"
+                    style={{
+                      color: isSelDay ? "var(--color-primary)" : "var(--color-muted-foreground)",
+                      fontWeight: isSelDay ? 700 : 400,
+                    }}
+                  >
                     {d.label}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -2023,23 +2324,44 @@ function MobileApp(p: AppProps) {
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
           {/* TODAY */}
           {tab === "today" && (
-            <div className="space-y-4 pb-6 pt-5">
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  {new Date().toLocaleDateString("en", {
-                    weekday: "long",
-                    month: "long",
-                    day: "numeric",
-                  })}
+            <div className="space-y-4 pb-6 pt-4">
+              {/* Date strip card */}
+              <div
+                className="rounded-2xl border border-border bg-card p-4"
+                style={{ boxShadow: "var(--shadow-soft)" }}
+              >
+                <DateStrip
+                  habits={p.habits}
+                  selectedDate={p.selectedDate}
+                  setSelectedDate={p.setSelectedDate}
+                />
+                {/* Summary below strip */}
+                <div className="mt-3 border-t border-[oklch(1_0_0_/_0.06)] pt-3">
+                  <h1 className="font-display text-2xl leading-tight text-foreground">
+                    {p.selectedDate >
+                    (() => {
+                      const d = new Date();
+                      d.setHours(0, 0, 0, 0);
+                      return d;
+                    })()
+                      ? p.statsForSelectedDate.active > 0
+                        ? `${p.statsForSelectedDate.active} habit${p.statsForSelectedDate.active !== 1 ? "s" : ""} planned`
+                        : "Nothing planned"
+                      : p.statsForSelectedDate.done === p.statsForSelectedDate.active &&
+                          p.statsForSelectedDate.active > 0
+                        ? "All done! 🎉"
+                        : p.statsForSelectedDate.active === 0
+                          ? "No habits this day"
+                          : `${p.statsForSelectedDate.active - p.statsForSelectedDate.done} left`}
+                  </h1>
+                  {p.statsForSelectedDate.active > 0 && (
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {p.statsForSelectedDate.done} of {p.statsForSelectedDate.active} completed
+                    </p>
+                  )}
                 </div>
-                <h1 className="mt-1 font-display text-3xl leading-tight text-foreground">
-                  {stats.doneToday === stats.active && stats.active > 0
-                    ? "All done today! 🎉"
-                    : stats.active === 0
-                      ? "Start your first habit"
-                      : `${stats.active - stats.doneToday} habit${stats.active - stats.doneToday !== 1 ? "s" : ""} left today`}
-                </h1>
               </div>
+
               {/* Ring */}
               <div
                 className="flex items-center gap-5 rounded-2xl border border-border bg-card p-4"
@@ -2063,7 +2385,13 @@ function MobileApp(p: AppProps) {
                       strokeWidth="6"
                       stroke="var(--color-primary)"
                       strokeDasharray={circ}
-                      strokeDashoffset={dashOff}
+                      strokeDashoffset={
+                        circ *
+                        (1 -
+                          (p.statsForSelectedDate.active
+                            ? p.statsForSelectedDate.done / p.statsForSelectedDate.active
+                            : 0))
+                      }
                       strokeLinecap="round"
                       transform="rotate(-90 48 48)"
                       style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)" }}
@@ -2071,10 +2399,10 @@ function MobileApp(p: AppProps) {
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="font-display text-2xl leading-none text-foreground">
-                      {stats.doneToday}
+                      {p.statsForSelectedDate.done}
                     </span>
                     <span className="font-mono text-[10px] text-muted-foreground">
-                      /{stats.active}
+                      /{p.statsForSelectedDate.active}
                     </span>
                   </div>
                 </div>
@@ -2084,26 +2412,33 @@ function MobileApp(p: AppProps) {
                   <MiniStat label="Best streak" value={`${stats.bestStreak}d`} highlight />
                 </div>
               </div>
+
               {/* Check-off */}
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-display text-xl text-foreground">Today's habits</h2>
+                  <h2 className="font-display text-xl text-foreground">
+                    {p.selectedDateKey === fmtDate(new Date())
+                      ? "Today's habits"
+                      : `${p.selectedDate.toLocaleDateString("en", { weekday: "long" })}'s habits`}
+                  </h2>
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    {todayHabits.length} active
+                    {todayHabits.length} {todayHabits.length === 1 ? "habit" : "habits"}
                   </span>
                 </div>
                 {todayHabits.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
-                    <p className="font-display text-lg text-foreground">No active habits yet.</p>
+                    <p className="font-display text-lg text-foreground">No habits this day.</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Start one to begin tracking.
+                      Select today or a date with active habits.
                     </p>
-                    <button
-                      onClick={() => setAddOpen(true)}
-                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all active:scale-95"
-                    >
-                      <Plus className="size-4" /> New habit
-                    </button>
+                    {p.selectedDateKey === fmtDate(new Date()) && (
+                      <button
+                        onClick={() => setAddOpen(true)}
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all active:scale-95"
+                      >
+                        <Plus className="size-4" /> New habit
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -2111,6 +2446,7 @@ function MobileApp(p: AppProps) {
                       <TodayHabitRow
                         key={h.id}
                         habit={h}
+                        dateKey={p.selectedDateKey}
                         onToggle={toggleToday}
                         onSaveNote={saveNote}
                       />
@@ -2118,6 +2454,7 @@ function MobileApp(p: AppProps) {
                   </div>
                 )}
               </div>
+
               {/* Weekly mini chart */}
               <div
                 className="rounded-2xl border border-border bg-card p-4"
@@ -2133,26 +2470,40 @@ function MobileApp(p: AppProps) {
                 <div className="flex items-end gap-1.5">
                   {rollup.map((d, i) => {
                     const ratio = d.total ? d.done / d.total : 0,
-                      h = Math.max(6, ratio * 64),
-                      isToday = i === rollup.length - 1;
+                      hh = Math.max(6, ratio * 64),
+                      isToday = i === rollup.length - 1,
+                      isSelDay = d.key === p.selectedDateKey;
                     return (
                       <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
                         <div className="relative w-full" style={{ height: 64 }}>
                           <div
-                            className="absolute inset-x-1 bottom-0 rounded-sm bg-[oklch(1_0_0_/_0.04)]"
-                            style={{ height: "100%" }}
+                            className="absolute inset-x-1 bottom-0 rounded-sm"
+                            style={{
+                              height: "100%",
+                              background: isSelDay ? "oklch(1 0 0 / 0.07)" : "oklch(1 0 0 / 0.04)",
+                            }}
                           />
                           <div
                             className="absolute inset-x-1 bottom-0 rounded-sm transition-all"
                             style={{
-                              height: h,
-                              background: isToday
-                                ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
-                                : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
+                              height: hh,
+                              background:
+                                isSelDay || isToday
+                                  ? "linear-gradient(180deg,var(--color-primary),oklch(0.62 0.16 158))"
+                                  : "linear-gradient(180deg,oklch(1 0 0/.2),oklch(1 0 0/.07))",
+                              opacity: isSelDay ? 1 : isToday ? 0.7 : 1,
                             }}
                           />
                         </div>
-                        <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                        <div
+                          className="font-mono text-[10px] uppercase"
+                          style={{
+                            color: isSelDay
+                              ? "var(--color-primary)"
+                              : "var(--color-muted-foreground)",
+                            fontWeight: isSelDay ? 700 : 400,
+                          }}
+                        >
                           {d.label}
                         </div>
                       </div>
@@ -2981,15 +3332,16 @@ function EmptyState({ filter }: { filter: FilterId }) {
 /* ─── TodayHabitRow — shared check-off card with inline note editor ─── */
 function TodayHabitRow({
   habit: h,
+  dateKey,
   onToggle,
   onSaveNote,
 }: {
   habit: Habit;
+  dateKey: string;
   onToggle: (id: string) => void;
   onSaveNote: (id: string, note: string) => void;
 }) {
-  const t = today();
-  const entry = h.track[t];
+  const entry = h.track[dateKey];
   const done = entry?.done ?? false;
   const inRange = entry !== undefined;
   const existingNote = entry?.note ?? "";
