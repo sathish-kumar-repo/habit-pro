@@ -152,12 +152,13 @@ function ErrorText({ message, onDismiss }: { message: string; onDismiss: () => v
   );
 }
 
-interface Chip {
+interface ChecklistItem {
   icon: ReactNode;
-  label: string;
+  title: string;
+  desc: string;
 }
 
-const CHIPS: Chip[] = [
+const CHECKLIST: ChecklistItem[] = [
   {
     icon: (
       <svg
@@ -167,12 +168,13 @@ const CHIPS: Chip[] = [
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[12.5px]"
+        className="size-[15px]"
       >
         <path d="M17.5 19H9a6 6 0 1 1 1.2-11.88A6.5 6.5 0 0 1 22 10.5a4.5 4.5 0 0 1-.86 8.34" />
       </svg>
     ),
-    label: "Synced",
+    title: "Synced everywhere",
+    desc: "Your habits follow you across phone, tablet, and desktop.",
   },
   {
     icon: (
@@ -183,12 +185,13 @@ const CHIPS: Chip[] = [
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[12.5px]"
+        className="size-[15px]"
       >
         <path d="M12 21s7-3.5 7-9.5V6l-7-2.5L5 6v5.5c0 6 7 9.5 7 9.5z" />
       </svg>
     ),
-    label: "Encrypted",
+    title: "Encrypted by default",
+    desc: "Your data is backed up automatically, never stored in plain text.",
   },
   {
     icon: (
@@ -199,12 +202,13 @@ const CHIPS: Chip[] = [
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-[12.5px]"
+        className="size-[15px]"
       >
         <path d="M4 19V10.5M11 19V5M18 19v-6.5M4 19h14" />
       </svg>
     ),
-    label: "Insightful",
+    title: "Real progress insight",
+    desc: "See streaks, trends, and consistency over time — not just checkmarks.",
   },
 ];
 
@@ -382,25 +386,80 @@ export function AuthScreen() {
               </button>
 
               {error && <ErrorText message={error} onDismiss={clearError} />}
-            </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-2.5">
-              {CHIPS.map((c) => (
-                <div
-                  key={c.label}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                  style={{
-                    background: "oklch(1 0 0 / 0.04)",
-                    border: "1px solid oklch(1 0 0 / 0.07)",
-                  }}
+              <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-muted-foreground/70">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.75}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-3 shrink-0"
                 >
-                  <span style={{ color: "oklch(0.74 0.16 158)" }}>{c.icon}</span>
-                  <span className="text-[11px] font-medium text-muted-foreground">{c.label}</span>
-                </div>
-              ))}
+                  <rect x="4" y="10" width="16" height="10" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+                No password to remember — Google handles sign-in securely.
+              </p>
             </div>
 
-            <p className="mt-8 text-[11.5px] leading-relaxed text-muted-foreground/55">
+            <div className="my-8 flex items-center gap-4">
+              <div className="h-px flex-1" style={{ background: "oklch(1 0 0 / 0.07)" }} />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                What you get
+              </span>
+              <div className="h-px flex-1" style={{ background: "oklch(1 0 0 / 0.07)" }} />
+            </div>
+
+            <ul className="space-y-4">
+              {CHECKLIST.map((item) => (
+                <li key={item.title} className="flex items-start gap-3">
+                  <div
+                    className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-[9px]"
+                    style={{
+                      background: "oklch(1 0 0 / 0.05)",
+                      color: "oklch(0.74 0.16 158)",
+                      border: "1px solid oklch(1 0 0 / 0.07)",
+                    }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">{item.title}</p>
+                    <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                      {item.desc}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div
+              className="mt-8 flex items-center gap-2.5 border-t pt-6"
+              style={{ borderColor: "oklch(1 0 0 / 0.06)" }}
+            >
+              <div className="flex -space-x-2" aria-hidden="true">
+                {["A", "M", "S"].map((letter) => (
+                  <div
+                    key={letter}
+                    className="flex size-6 items-center justify-center rounded-full text-[9px] font-semibold"
+                    style={{
+                      background: "oklch(0.19 0.008 240)",
+                      color: "oklch(0.74 0.16 158)",
+                      boxShadow: "0 0 0 2px oklch(0.115 0.008 240)",
+                    }}
+                  >
+                    {letter}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11.5px] text-muted-foreground">
+                Joined by thousands building consistent habits.
+              </p>
+            </div>
+
+            <p className="mt-6 text-[11.5px] leading-relaxed text-muted-foreground/55">
               Used only for authentication and sync — never for reading your contacts, email, or
               other Google data.
             </p>
