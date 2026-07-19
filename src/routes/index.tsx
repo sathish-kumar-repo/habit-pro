@@ -46,14 +46,14 @@ export const Route = createFileRoute("/")({
       { property: "og:type",        content: "website" },
       { property: "og:title",       content: "Habito — Daily Habit Tracker" },
       { property: "og:description", content: "Build lasting habits with Habito. Track streaks, measure progress, and stay consistent every day." },
-      { property: "og:image",       content: "/opengraph.jpg" },
+      { property: "og:image",       content: "/logo.png" },
       { property: "og:image:width",  content: "1200" },
       { property: "og:image:height", content: "630" },
       /* Twitter / X Card */
       { name: "twitter:card",        content: "summary_large_image" },
       { name: "twitter:title",       content: "Habito — Daily Habit Tracker" },
       { name: "twitter:description", content: "Build lasting habits with Habito. Track streaks, measure progress, and stay consistent every day." },
-      { name: "twitter:image",       content: "/opengraph.jpg" },
+      { name: "twitter:image",       content: "/logo.png" },
     ],
     links: [
       { rel: "icon",             href: "/favicon.ico" },
