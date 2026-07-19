@@ -8,7 +8,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { z } from "zod";
-import { CHALLENGE_COLLECTION, db } from "./firebase";
+import { db } from "./firebase";
 
 // Track entry mirrors the Flutter app: [done, note, Timestamp]
 export type TrackEntry = { done: boolean; note: string; date: Date };
@@ -210,7 +210,22 @@ export function classify(habit: Habit): "ongoing" | "upcoming" | "finished" | "p
   return "ongoing";
 }
 
-// ---------- Firestore I/O ----------
+// ---------- Firestore path helpers ----------
+
+/**
+ * Returns the Firestore collection reference for the authenticated user's
+ * habits. Data lives at `users/{uid}/challenge/{habitId}` so each user's
+ * habits are fully isolated from every other user's.
+ */
+function habitsCol(uid: string) {
+  return collection(db, "users", uid, "challenge");
+}
+
+function habitDoc(uid: string, habitId: string) {
+  return doc(db, "users", uid, "challenge", habitId);
+}
+
+// ---------- Firestore wire types ----------
 
 type FirestoreTrack = Record<
   string,
@@ -282,23 +297,42 @@ function toFirestoreTrack(track: Habit["track"]): FirestoreTrack {
   return out;
 }
 
-export function subscribeHabits(cb: (habits: Habit[]) => void): () => void {
-  const ref = collection(db, CHALLENGE_COLLECTION);
-  return onSnapshot(ref, (snap) => {
-    const list = snap.docs.map((d) => fromFirestore(d.id, d.data() as FirestoreChallenge));
-    cb(list);
-  });
+// ---------- Firestore service — all functions require the user's uid ----------
+
+/**
+ * Subscribes to the authenticated user's habits in real time.
+ * Returns an unsubscribe function to be called on component unmount.
+ */
+export function subscribeHabits(
+  uid: string,
+  cb: (habits: Habit[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return onSnapshot(
+    habitsCol(uid),
+    (snap) => {
+      const list = snap.docs.map((d) => fromFirestore(d.id, d.data() as FirestoreChallenge));
+      cb(list);
+    },
+    (err) => {
+      console.error("[habits] snapshot error:", err);
+      onError?.(err);
+    },
+  );
 }
 
-export async function createHabit(input: {
-  name: string;
-  description: string;
-  plan: string;
-  start: Date;
-  end: Date;
-  color: string;
-  icon: string;
-}): Promise<void> {
+export async function createHabit(
+  uid: string,
+  input: {
+    name: string;
+    description: string;
+    plan: string;
+    start: Date;
+    end: Date;
+    color: string;
+    icon: string;
+  },
+): Promise<void> {
   const id = crypto.randomUUID();
   const track = buildTrack(input.start, input.end);
   const payload: FirestoreChallenge = {
@@ -313,32 +347,42 @@ export async function createHabit(input: {
     icon: input.icon,
     createdAt: Date.now(),
   };
-  await setDoc(doc(db, CHALLENGE_COLLECTION, id), payload);
+  await setDoc(habitDoc(uid, id), payload);
 }
 
-export async function deleteHabit(id: string): Promise<void> {
-  await deleteDoc(doc(db, CHALLENGE_COLLECTION, id));
+export async function deleteHabit(uid: string, id: string): Promise<void> {
+  await deleteDoc(habitDoc(uid, id));
 }
 
-export async function toggleHabitDay(habit: Habit, dayKey: string): Promise<void> {
+export async function toggleHabitDay(
+  uid: string,
+  habit: Habit,
+  dayKey: string,
+): Promise<void> {
   const entry = habit.track[dayKey];
   if (!entry) return;
   const next = { ...habit.track, [dayKey]: { ...entry, done: !entry.done } };
-  await updateDoc(doc(db, CHALLENGE_COLLECTION, habit.id), {
+  await updateDoc(habitDoc(uid, habit.id), {
     track: toFirestoreTrack(next),
   });
 }
 
-export async function setHabitNote(habit: Habit, dayKey: string, note: string): Promise<void> {
+export async function setHabitNote(
+  uid: string,
+  habit: Habit,
+  dayKey: string,
+  note: string,
+): Promise<void> {
   const entry = habit.track[dayKey];
   if (!entry) return;
   const next = { ...habit.track, [dayKey]: { ...entry, note } };
-  await updateDoc(doc(db, CHALLENGE_COLLECTION, habit.id), {
+  await updateDoc(habitDoc(uid, habit.id), {
     track: toFirestoreTrack(next),
   });
 }
 
 export async function updateHabit(
+  uid: string,
   habit: Habit,
   input: {
     name: string;
@@ -351,13 +395,13 @@ export async function updateHabit(
   },
 ): Promise<void> {
   const track = buildTrack(input.start, input.end);
-  // preserve existing completion state for days that still fall within the new range
+  // Preserve existing completion state for days that still fall within the new range
   for (const [key, entry] of Object.entries(habit.track)) {
     if (track[key]) {
       track[key] = { ...track[key], done: entry.done, note: entry.note };
     }
   }
-  await updateDoc(doc(db, CHALLENGE_COLLECTION, habit.id), {
+  await updateDoc(habitDoc(uid, habit.id), {
     myChallenge: input.name,
     description: input.description,
     myPlan: input.plan,

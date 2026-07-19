@@ -3,7 +3,9 @@
  * @description Central data-orchestration hook. Owns all Firestore subscriptions,
  * derived memoized computations, and action handlers shared across Desktop and
  * Mobile layouts.
- * @author Sathish Kumar
+ *
+ * All subscriptions are scoped to the authenticated user's uid — no data
+ * leaks between accounts.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -22,8 +24,15 @@ import {
 import { Todo, subscribeTodos } from "@/lib/todos";
 import type { FilterId, AppTab, ProgressRange, ProgressSort } from "@/types/app";
 
-export function useAppData() {
+export function useAppData(uid: string) {
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [habitsLoading, setHabitsLoading] = useState(true);
+  const [habitsError, setHabitsError] = useState<string | null>(null);
+
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todosLoading, setTodosLoading] = useState(true);
+  const [todosError, setTodosError] = useState<string | null>(null);
+
   const [filter, setFilter] = useState<FilterId>("ongoing");
   const [openId, setOpenId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -38,21 +47,43 @@ export function useAppData() {
     return d;
   });
 
-  const [habitsLoading, setHabitsLoading] = useState(true);
-  const [todos, setTodos] = useState<Todo[]>([]);
-
+  // Subscribe to the authenticated user's habits
   useEffect(() => {
-    const u = subscribeHabits((data) => {
-      setHabits(data);
-      setHabitsLoading(false);
-    });
-    return u;
-  }, []);
+    if (!uid) return;
+    setHabitsLoading(true);
+    setHabitsError(null);
+    const unsub = subscribeHabits(
+      uid,
+      (data) => {
+        setHabits(data);
+        setHabitsLoading(false);
+      },
+      (err) => {
+        setHabitsError(err.message ?? "Failed to load habits");
+        setHabitsLoading(false);
+      },
+    );
+    return unsub;
+  }, [uid]);
 
+  // Subscribe to the authenticated user's todos
   useEffect(() => {
-    const u = subscribeTodos(setTodos);
-    return u;
-  }, []);
+    if (!uid) return;
+    setTodosLoading(true);
+    setTodosError(null);
+    const unsub = subscribeTodos(
+      uid,
+      (data) => {
+        setTodos(data);
+        setTodosLoading(false);
+      },
+      (err) => {
+        setTodosError(err.message ?? "Failed to load todos");
+        setTodosLoading(false);
+      },
+    );
+    return unsub;
+  }, [uid]);
 
   const selectedDateKey = useMemo(() => fmtDate(selectedDate), [selectedDate]);
 
@@ -276,14 +307,14 @@ export function useAppData() {
     return { active, done };
   }, [todayHabits, selectedDateKey]);
 
-  const handleDelete = (id: string) => void deleteHabitFs(id);
+  const handleDelete = (id: string) => void deleteHabitFs(uid, id);
 
   const toggleToday = (id: string) => {
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
     if (selectedDate > todayDate) return;
     const h = habits.find((h) => h.id === id);
-    if (h) void toggleHabitDay(h, selectedDateKey);
+    if (h) void toggleHabitDay(uid, h, selectedDateKey);
   };
 
   const toggleDay = (id: string, day: string) => {
@@ -293,12 +324,12 @@ export function useAppData() {
     todayDate.setHours(0, 0, 0, 0);
     if (targetDate > todayDate) return;
     const h = habits.find((h) => h.id === id);
-    if (h) void toggleHabitDay(h, day);
+    if (h) void toggleHabitDay(uid, h, day);
   };
 
   const saveNote = (id: string, note: string) => {
     const h = habits.find((h) => h.id === id);
-    if (h) void setHabitNote(h, selectedDateKey, note);
+    if (h) void setHabitNote(uid, h, selectedDateKey, note);
   };
 
   const openHabit = habits.find((h) => h.id === openId) ?? null;
@@ -313,7 +344,7 @@ export function useAppData() {
     habitSearch, setHabitSearch, weekdayStats, periodComparison,
     personalRecords, consistencyScore, perHabitExtended,
     selectedDate, setSelectedDate, selectedDateKey, statsForSelectedDate,
-    todos, habitsLoading,
+    todos, habitsLoading, habitsError, todosLoading, todosError,
   };
 }
 

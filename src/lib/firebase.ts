@@ -18,4 +18,3 @@ export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseC
 export const db = getFirestore(firebaseApp);
 export const auth = getAuth(firebaseApp);
 export const googleProvider = new GoogleAuthProvider();
-export const CHALLENGE_COLLECTION = "challenge";

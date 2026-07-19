@@ -5,6 +5,7 @@ import { X, Pencil } from "lucide-react";
 import { Habit, COLORS, habitSchema, updateHabit } from "@/lib/habits";
 import { DatePickerWithPresets } from "./DatePickerWithPresets";
 import { HABIT_ICONS, HabitIcon, DEFAULT_ICON } from "./HabitIcon";
+import { useAuth } from "@/hooks/use-auth";
 import type { z } from "zod";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -31,6 +32,7 @@ function useIsDesktop() {
 
 export function EditHabitDialog({ habit, onClose }: Props) {
   const isDesktop = useIsDesktop();
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [plan, setPlan] = useState("");
@@ -76,10 +78,11 @@ export function EditHabitDialog({ habit, onClose }: Props) {
       setErrors(fe);
       return;
     }
+    if (!user) return;
     setErrors({});
     setSaving(true);
     try {
-      await updateHabit(habit, result.data);
+      await updateHabit(user.uid, habit, result.data);
       onClose();
     } finally {
       setSaving(false);

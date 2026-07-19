@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Habit, progress, streak, fmtDate, setHabitNote } from "@/lib/habits";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Flame,
   Target,
@@ -95,6 +96,7 @@ function buildCalendarGrid(year: number, month: number, habit: Habit, today: Dat
 
 export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
   const isDesktop = useIsDesktop();
+  const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -209,10 +211,10 @@ export function HabitDetailDialog({ habit, onClose, onToggleDay }: Props) {
   };
 
   const handleSaveNote = async () => {
-    if (!selectedDay || !habit) return;
+    if (!selectedDay || !habit || !user) return;
     setSavingNote(true);
     try {
-      await setHabitNote(habit, selectedDay, noteText.trim());
+      await setHabitNote(user.uid, habit, selectedDay, noteText.trim());
     } finally {
       setSavingNote(false);
     }

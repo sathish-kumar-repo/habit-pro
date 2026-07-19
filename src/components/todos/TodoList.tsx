@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Todo, createTodo, toggleTodo, deleteTodo, updateTodoText, reorderTodos } from "@/lib/todos";
 import { Plus, Trash2, Check, ClipboardList, Pencil, GripVertical } from "lucide-react";
 import { useGlobalConfetti } from "@/hooks/use-global-confetti";
+import { useAuth } from "@/hooks/use-auth";
 
 const TODO_CONFETTI_COLOR = "#10b981";
 
@@ -52,6 +53,7 @@ function mergeIds(localIds: string[], incoming: Todo[]): string[] {
 }
 
 export function TodoList({ todos }: Props) {
+  const { user } = useAuth();
   const [input, setInput] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
@@ -79,23 +81,26 @@ export function TodoList({ todos }: Props) {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || !user) return;
     setInput("");
     setAdding(true);
     try {
-      await createTodo(text);
+      await createTodo(user.uid, text);
     } finally {
       setAdding(false);
     }
   }
 
   async function handleClearDone() {
-    await Promise.all(done.map((t) => deleteTodo(t.id)));
+    if (!user) return;
+    await Promise.all(done.map((t) => deleteTodo(user.uid, t.id)));
   }
 
   // Called by TodoItem when a drag-drop reorder completes
   const handleReorder = useCallback(
     (dragId: string, overId: string) => {
+      if (!user) return;
+      const uid = user.uid;
       setLocalIds((prev) => {
         const next = [...prev];
         const from = next.indexOf(dragId);
@@ -104,11 +109,11 @@ export function TodoList({ todos }: Props) {
         next.splice(from, 1);
         next.splice(to, 0, dragId);
         // Persist to Firestore (fire-and-forget)
-        reorderTodos(next).catch(console.error);
+        reorderTodos(uid, next).catch(console.error);
         return next;
       });
     },
-    [],
+    [user],
   );
 
   return (
@@ -187,7 +192,7 @@ export function TodoList({ todos }: Props) {
       {visible.length > 0 && (
         <ul className="space-y-2">
           {visible.map((todo) => (
-            <TodoItem key={todo.id} todo={todo} onReorder={handleReorder} />
+            <TodoItem key={todo.id} todo={todo} uid={user?.uid ?? ""} onReorder={handleReorder} />
           ))}
         </ul>
       )}
@@ -207,10 +212,11 @@ export function TodoList({ todos }: Props) {
 // ---------------------------------------------------------------------------
 type TodoItemProps = {
   todo: Todo;
+  uid: string;
   onReorder: (dragId: string, overId: string) => void;
 };
 
-function TodoItem({ todo, onReorder }: TodoItemProps) {
+function TodoItem({ todo, uid, onReorder }: TodoItemProps) {
   const { trigger: triggerConfetti } = useGlobalConfetti();
   const checkboxRef = useRef<HTMLButtonElement>(null);
   const [editing, setEditing] = useState(false);
@@ -230,16 +236,18 @@ function TodoItem({ todo, onReorder }: TodoItemProps) {
   }, [todo.text, editing]);
 
   async function handleToggle() {
+    if (!uid) return;
     const completing = !todo.done;
     if (completing) {
       triggerConfetti(TODO_CONFETTI_COLOR, checkboxRef.current);
       playDoneSound();
     }
-    await toggleTodo(todo.id, completing);
+    await toggleTodo(uid, todo.id, completing);
   }
 
   async function handleDelete() {
-    await deleteTodo(todo.id);
+    if (!uid) return;
+    await deleteTodo(uid, todo.id);
   }
 
   async function handleSaveEdit() {
@@ -248,9 +256,10 @@ function TodoItem({ todo, onReorder }: TodoItemProps) {
       setEditText(todo.text);
       return;
     }
+    if (!uid) return;
     setSaving(true);
     try {
-      await updateTodoText(todo.id, editText);
+      await updateTodoText(uid, todo.id, editText);
       setEditing(false);
     } finally {
       setSaving(false);

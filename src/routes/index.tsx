@@ -79,7 +79,7 @@ function Index() {
 }
 
 function AuthenticatedApp({ user }: { user: User }) {
-  const data = useAppData();
+  const data = useAppData(user.uid);
   const { signOut } = useAuth();
 
   return (
