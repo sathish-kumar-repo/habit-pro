@@ -77,7 +77,7 @@ export function AuthScreen() {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4 py-16">
       {/* Background — mirrors the global body gradient from styles.css */}
-      <div
+      {/* <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
@@ -87,10 +87,10 @@ export function AuthScreen() {
             "radial-gradient(ellipse 40% 30% at 80% 10%, oklch(0.74 0.16 158 / 0.05), transparent 55%)",
           ].join(", "),
         }}
-      />
+      /> */}
 
       {/* Subtle grid */}
-      <div
+      {/* <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.025]"
         style={{
@@ -98,7 +98,7 @@ export function AuthScreen() {
             "linear-gradient(oklch(1 0 0) 1px, transparent 1px), linear-gradient(90deg, oklch(1 0 0) 1px, transparent 1px)",
           backgroundSize: "52px 52px",
         }}
-      />
+      /> */}
 
       <div className="relative z-10 w-full max-w-[420px]">
         {/* ── App identity ── */}
