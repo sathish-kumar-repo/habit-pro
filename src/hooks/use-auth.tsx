@@ -63,7 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (code === "auth/network-request-failed") {
         setError("Network error. Please check your connection and try again.");
       } else {
-        console.log(err)
         setError("Sign-in failed. Please try again.");
       }
     } finally {
