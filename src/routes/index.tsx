@@ -16,11 +16,15 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAppData } from "@/hooks/use-app-data";
+import { useAuth } from "@/hooks/use-auth";
 import { DesktopApp } from "@/components/layout/DesktopApp";
 import { MobileApp } from "@/components/layout/MobileApp";
 import { AddHabitDialog } from "@/components/habits/AddHabitDialog";
 import { HabitDetailDialog } from "@/components/habits/HabitDetailDialog";
 import { EditHabitDialog } from "@/components/habits/EditHabitDialog";
+import { AuthScreen } from "@/components/auth/AuthScreen";
+import { AuthLoadingScreen } from "@/components/auth/AuthLoadingScreen";
+import type { User } from "firebase/auth";
 
 /* ─── Route definition ──────────────────────────────────────────────────────
    Meta tags are pre-rendered by TanStack Start's <head()> API, giving the
@@ -62,13 +66,27 @@ export const Route = createFileRoute("/")({
 
 /* ─── Root component ─────────────────────────────────────────────────────── */
 function Index() {
+  const { user, loading } = useAuth();
+
+  // While Firebase resolves the initial session, show a loading screen
+  if (loading) return <AuthLoadingScreen />;
+
+  // Unauthenticated — show the sign-in screen
+  if (!user) return <AuthScreen />;
+
+  // Authenticated — render the full app (user is narrowed to User here)
+  return <AuthenticatedApp user={user} />;
+}
+
+function AuthenticatedApp({ user }: { user: User }) {
   const data = useAppData();
+  const { signOut } = useAuth();
 
   return (
     <>
       {/* Responsive layout shells — each hides itself at the wrong breakpoint */}
-      <DesktopApp {...data} />
-      <MobileApp  {...data} />
+      <DesktopApp {...data} user={user} onSignOut={signOut} />
+      <MobileApp  {...data} user={user} onSignOut={signOut} />
 
       {/* Shared drawers — mounted once, used by both layouts */}
       <AddHabitDialog open={data.addOpen} onOpenChange={data.setAddOpen} />

@@ -11,6 +11,8 @@ import { BarChart3, CheckCircle2, ClipboardList, Flame, LayoutGrid, Plus, Trendi
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
 import type { AppTab } from "@/types/app";
+import type { User } from "firebase/auth";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { QuickStat } from "@/components/ui/QuickStat";
 import { DesktopToday } from "@/components/today/DesktopToday";
 import { DesktopHabits } from "@/components/habits/DesktopHabits";
@@ -24,11 +26,13 @@ const NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
   { id: "todos",    icon: <ClipboardList className="size-5" />, label: "To-Do"   },
 ];
 
+type DesktopAppProps = AppProps & { user: User; onSignOut: () => void };
+
 /**
  * Full desktop application shell (≥ lg breakpoint).
  * Hidden on smaller viewports — MobileApp handles those.
  */
-export function DesktopApp(p: AppProps) {
+export function DesktopApp(p: DesktopAppProps) {
   const { stats, tab, setTab, setAddOpen } = p;
   const todayPct = stats.active ? stats.doneToday / stats.active : 0;
   const r = 32, circ = 2 * Math.PI * r, dashOff = circ * (1 - todayPct);
@@ -133,10 +137,13 @@ export function DesktopApp(p: AppProps) {
               {{ today: "Today's Focus", habits: "My Habits", progress: "My Progress", todos:"To-Do" }[tab]}
             </h1>
           </div>
-          <div className="hidden items-center gap-6 xl:flex" aria-label="Summary stats">
-            <QuickStat icon={<LayoutGrid className="size-3.5" />} label="Total" value={stats.total.toString()} />
-            <QuickStat icon={<Flame className="size-3.5" />}     label="Streak" value={`${stats.bestStreak}d`} accent />
-            <QuickStat icon={<TrendingUp className="size-3.5" />} label="Avg"   value={`${stats.avg}%`} />
+          <div className="flex items-center gap-5">
+            <div className="hidden items-center gap-6 xl:flex" aria-label="Summary stats">
+              <QuickStat icon={<LayoutGrid className="size-3.5" />} label="Total" value={stats.total.toString()} />
+              <QuickStat icon={<Flame className="size-3.5" />}     label="Streak" value={`${stats.bestStreak}d`} accent />
+              <QuickStat icon={<TrendingUp className="size-3.5" />} label="Avg"   value={`${stats.avg}%`} />
+            </div>
+            <UserMenu user={p.user} onSignOut={p.onSignOut} />
           </div>
         </header>
 

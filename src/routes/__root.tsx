@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GlobalConfettiProvider } from "@/hooks/use-global-confetti";
+import { AuthProvider } from "@/hooks/use-auth";
 import {
   Outlet,
   Link,
@@ -136,10 +137,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <GlobalConfettiProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </GlobalConfettiProvider>
+      <AuthProvider>
+        <GlobalConfettiProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </GlobalConfettiProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -13,6 +13,8 @@ import {
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
 import type { AppTab } from "@/types/app";
+import type { User } from "firebase/auth";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { MiniStat } from "@/components/ui/MiniStat";
 import { DateStrip } from "@/components/today/DateStrip";
 import { TodayHabitList } from "@/components/today/TodayHabitList";
@@ -28,11 +30,13 @@ const BOTTOM_NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
   { id: "todos",    icon: <ClipboardList className="size-5" />, label: "To-Do"    },
 ];
 
+type MobileAppProps = AppProps & { user: User; onSignOut: () => void };
+
 /**
  * Full mobile application shell (< lg breakpoint).
  * Hidden on desktop — DesktopApp handles those viewports.
  */
-export function MobileApp(p: AppProps) {
+export function MobileApp(p: MobileAppProps) {
   const {
     tab, setTab, setAddOpen, stats, filter, setFilter, counts, filtered,
     todayHabits, rollup, toggleToday, saveNote, setOpenId, setEditId, handleDelete,
@@ -89,14 +93,17 @@ export function MobileApp(p: AppProps) {
             </div>
           </div>
         </div>
-        {tab !== "today" && tab !== "todos" && (
-          <button
-            onClick={() => setAddOpen(true)}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-all active:scale-95"
-          >
-            <Plus className="size-3.5" /> New
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {tab !== "today" && tab !== "todos" && (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-all active:scale-95"
+            >
+              <Plus className="size-3.5" /> New
+            </button>
+          )}
+          <UserMenu user={p.user} onSignOut={p.onSignOut} />
+        </div>
       </header>
 
       {/* Pull-to-refresh */}

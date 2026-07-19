@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 // Public web Firebase config (mirrors the Flutter app's firebase_options.dart).
 // These values are safe to expose in client code.
@@ -13,4 +14,6 @@ const firebaseConfig = {
 
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(firebaseApp);
+export const auth = getAuth(firebaseApp);
+export const googleProvider = new GoogleAuthProvider();
 export const CHALLENGE_COLLECTION = "challenge";
