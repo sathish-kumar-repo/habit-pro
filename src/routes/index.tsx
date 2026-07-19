@@ -22,7 +22,7 @@ import {
   Award,
   Search,
   X,
-  SortAsc,
+  ClipboardList,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import {
@@ -41,9 +41,11 @@ import { HabitCard } from "@/components/habits/HabitCard";
 import { AddHabitDialog } from "@/components/habits/AddHabitDialog";
 import { HabitDetailDialog } from "@/components/habits/HabitDetailDialog";
 import { EditHabitDialog } from "@/components/habits/EditHabitDialog";
-import { useConfetti } from "@/hooks/use-confetti";
+import { useGlobalConfetti } from "@/hooks/use-global-confetti";
 import { playCompletionSound, triggerHaptic } from "@/lib/completion-fx";
 import { HabitIcon } from "@/components/habits/HabitIcon";
+import { Todo, subscribeTodos } from "@/lib/todos";
+import { TodoList } from "@/components/todos/TodoList";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -62,20 +64,10 @@ const FILTERS = [
   { id: "finished", label: "Completed" },
 ] as const;
 type FilterId = (typeof FILTERS)[number]["id"];
-type AppTab = "today" | "habits" | "progress";
+type AppTab = "today" | "habits" | "progress" | "todos";
 
 type ProgressRange = "7d" | "30d" | "all";
 type ProgressSort = "pct" | "streak" | "name";
-type HabitSort = "default" | "name_asc" | "name_desc" | "streak" | "progress";
-
-const HABIT_SORT_OPTIONS: { id: HabitSort; label: string }[] = [
-  { id: "default", label: "Default" },
-  { id: "name_asc", label: "Name A–Z" },
-  { id: "name_desc", label: "Name Z–A" },
-  { id: "streak", label: "Streak ↓" },
-  { id: "progress", label: "Progress ↓" },
-];
-
 /* ─── shared data hook ───────────────────────── */
 function useAppData() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -87,15 +79,25 @@ function useAppData() {
   const [progressRange, setProgressRange] = useState<ProgressRange>("7d");
   const [progressSort, setProgressSort] = useState<ProgressSort>("pct");
   const [habitSearch, setHabitSearch] = useState("");
-  const [habitSort, setHabitSort] = useState<HabitSort>("default");
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
 
+  const [habitsLoading, setHabitsLoading] = useState(true);
+  const [todos, setTodos] = useState<Todo[]>([]);
+
   useEffect(() => {
-    const u = subscribeHabits(setHabits);
+    const u = subscribeHabits((data) => {
+      setHabits(data);
+      setHabitsLoading(false);
+    });
+    return u;
+  }, []);
+
+  useEffect(() => {
+    const u = subscribeTodos(setTodos);
     return u;
   }, []);
 
@@ -114,18 +116,8 @@ function useAppData() {
     const q = habitSearch.trim().toLowerCase();
     return habits
       .filter((h) => classify(h) === filter)
-      .filter((h) => (q ? h.name.toLowerCase().includes(q) : true))
-      .sort((a, b) => {
-        if (habitSort === "name_asc") return a.name.localeCompare(b.name);
-        if (habitSort === "name_desc") return b.name.localeCompare(a.name);
-        if (habitSort === "streak") return streak(b) - streak(a);
-        if (habitSort === "progress") return progress(b).pct - progress(a).pct;
-        const ad = a.track[t]?.done ? 1 : 0,
-          bd = b.track[t]?.done ? 1 : 0;
-        if (ad !== bd) return ad - bd;
-        return b.createdAt - a.createdAt;
-      });
-  }, [habits, filter, habitSearch, habitSort]);
+      .filter((h) => (q ? h.name.toLowerCase().includes(q) : true));
+  }, [habits, filter, habitSearch]);
 
   const stats = useMemo(() => {
     const t = today();
@@ -361,14 +353,7 @@ function useAppData() {
   }, [habits]);
 
   const todayHabits = useMemo(() => {
-    return habits
-      .filter((h) => h.track[selectedDateKey] !== undefined)
-      .sort((a, b) => {
-        const ad = a.track[selectedDateKey]?.done ? 1 : 0,
-          bd = b.track[selectedDateKey]?.done ? 1 : 0;
-        if (ad !== bd) return ad - bd;
-        return b.createdAt - a.createdAt;
-      });
+    return habits.filter((h) => h.track[selectedDateKey] !== undefined);
   }, [habits, selectedDateKey]);
 
   const statsForSelectedDate = useMemo(() => {
@@ -437,8 +422,6 @@ function useAppData() {
     setProgressSort,
     habitSearch,
     setHabitSearch,
-    habitSort,
-    setHabitSort,
     weekdayStats,
     periodComparison,
     personalRecords,
@@ -448,6 +431,8 @@ function useAppData() {
     setSelectedDate,
     selectedDateKey,
     statsForSelectedDate,
+    todos,
+    habitsLoading,
   };
 }
 
@@ -664,6 +649,7 @@ function DesktopApp(p: AppProps) {
     { id: "today", icon: <CheckCircle2 className="size-5" />, label: "Today" },
     { id: "habits", icon: <LayoutGrid className="size-5" />, label: "Habits" },
     { id: "progress", icon: <BarChart3 className="size-5" />, label: "Progress" },
+    { id: "todos", icon: <ClipboardList className="size-5" />, label: "To-Do" },
   ];
 
   return (
@@ -840,6 +826,14 @@ function DesktopApp(p: AppProps) {
 
           {/* ─ PROGRESS ─ */}
           {tab === "progress" && <DesktopProgress {...p} />}
+
+          {/* ─ TO-DO ─ */}
+          {tab === "todos" && (
+            <div className="mx-auto max-w-2xl space-y-2">
+              <h2 className="text-lg font-semibold tracking-tight">To-Do List</h2>
+              <TodoList todos={p.todos} />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -859,7 +853,9 @@ function DesktopToday({
   setSelectedDate,
   selectedDateKey,
   statsForSelectedDate,
+  habitsLoading,
 }: AppProps) {
+  if (habitsLoading) return <DesktopTodaySkeleton />;
   const selPct = statsForSelectedDate.active
     ? statsForSelectedDate.done / statsForSelectedDate.active
     : 0;
@@ -1122,6 +1118,166 @@ function DesktopToday({
   );
 }
 
+/* ── Skeleton shimmer primitive ── */
+function Sk({ className }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded-xl ${className ?? ""}`}
+      style={{ background: "oklch(1 0 0 / 0.06)" }}
+    />
+  );
+}
+
+/* ── Desktop Today skeleton ── */
+function DesktopTodaySkeleton() {
+  return (
+    <div className="grid h-full gap-5 xl:grid-cols-[1fr_340px]">
+      {/* Left */}
+      <div className="flex flex-col gap-5">
+        {/* Date strip card */}
+        <div className="rounded-2xl border border-border bg-card p-5" style={{ boxShadow: "var(--shadow-soft)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <Sk className="h-3 w-24" />
+            <div className="flex gap-2">
+              <Sk className="h-7 w-7 rounded-lg" />
+              <Sk className="h-7 w-7 rounded-lg" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Sk key={i} className="h-16 flex-1 rounded-2xl" />
+            ))}
+          </div>
+          <div className="mt-4 border-t border-[oklch(1_0_0_/_0.06)] pt-4 space-y-2">
+            <Sk className="h-3 w-16" />
+            <Sk className="h-7 w-40" />
+          </div>
+        </div>
+
+        {/* Habit list */}
+        <div className="flex flex-1 flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Sk className="h-6 w-36" />
+            <Sk className="h-3 w-16" />
+          </div>
+          <div className="grid gap-2.5 xl:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border bg-card p-4 flex items-center gap-4" style={{ boxShadow: "var(--shadow-soft)" }}>
+                <Sk className="size-10 rounded-full shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Sk className="h-4 w-32" />
+                  <Sk className="h-3 w-24" />
+                </div>
+                <Sk className="h-3 w-10" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right */}
+      <div className="flex flex-col gap-5">
+        {/* Ring card */}
+        <div className="rounded-2xl border border-border bg-card p-6" style={{ boxShadow: "var(--shadow-soft)" }}>
+          <Sk className="h-3 w-32 mb-5" />
+          <div className="flex justify-center my-5">
+            <Sk className="size-[140px] rounded-full" />
+          </div>
+          <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5">
+                <Sk className="h-6 w-10" />
+                <Sk className="h-2 w-8" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Weekly chart */}
+        <div className="flex-1 rounded-2xl border border-border bg-card p-5" style={{ boxShadow: "var(--shadow-soft)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <Sk className="h-5 w-24" />
+            <Sk className="h-3 w-12" />
+          </div>
+          <div className="flex items-end gap-2">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                <Sk className="w-full rounded-sm" style={{ height: `${30 + Math.sin(i) * 20 + 20}px` }} />
+                <Sk className="h-2 w-4" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Mobile Today skeleton ── */
+function MobileTodaySkeleton() {
+  return (
+    <div className="space-y-4 pb-6 pt-4">
+      {/* Date strip card */}
+      <div className="rounded-2xl border border-border bg-card p-4" style={{ boxShadow: "var(--shadow-soft)" }}>
+        <div className="flex items-center justify-between mb-3">
+          <Sk className="h-3 w-20" />
+          <div className="flex gap-2">
+            <Sk className="h-6 w-6 rounded-lg" />
+            <Sk className="h-6 w-6 rounded-lg" />
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Sk key={i} className="h-14 flex-1 rounded-xl" />
+          ))}
+        </div>
+        <div className="mt-3 border-t border-[oklch(1_0_0_/_0.06)] pt-3 space-y-2">
+          <Sk className="h-6 w-36" />
+        </div>
+      </div>
+
+      {/* Ring stats card */}
+      <div className="flex items-center gap-5 rounded-2xl border border-border bg-card p-4" style={{ boxShadow: "var(--shadow-soft)" }}>
+        <Sk className="size-24 rounded-full shrink-0" />
+        <div className="flex-1 space-y-3">
+          <div className="flex justify-between">
+            <Sk className="h-3 w-20" />
+            <Sk className="h-4 w-8" />
+          </div>
+          <div className="flex justify-between">
+            <Sk className="h-3 w-20" />
+            <Sk className="h-4 w-10" />
+          </div>
+          <div className="flex justify-between">
+            <Sk className="h-3 w-20" />
+            <Sk className="h-4 w-8" />
+          </div>
+        </div>
+      </div>
+
+      {/* Habit cards */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <Sk className="h-6 w-36" />
+          <Sk className="h-3 w-16" />
+        </div>
+        <div className="grid gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3" style={{ boxShadow: "var(--shadow-soft)" }}>
+              <Sk className="size-9 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Sk className="h-4 w-28" />
+                <Sk className="h-3 w-20" />
+              </div>
+              <Sk className="h-3 w-8" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Desktop Habits ── */
 function DesktopHabits({
   filter,
@@ -1135,11 +1291,7 @@ function DesktopHabits({
   setAddOpen,
   habitSearch,
   setHabitSearch,
-  habitSort,
-  setHabitSort,
 }: AppProps) {
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortLabel = HABIT_SORT_OPTIONS.find((o) => o.id === habitSort)?.label ?? "Sort";
 
   return (
     <div className="space-y-5">
@@ -1169,82 +1321,32 @@ function DesktopHabits({
         ))}
       </div>
 
-      {/* Search + Sort row */}
-      <div className="flex items-center gap-3">
-        {/* Search input */}
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={habitSearch}
-            onChange={(e) => setHabitSearch(e.target.value)}
-            placeholder="Search habits…"
-            className="w-full rounded-xl border py-2 pl-9 pr-9 text-sm outline-none transition-all focus:ring-1"
-            style={
-              {
-                background: "var(--color-card)",
-                borderColor: "oklch(1 0 0 / 0.08)",
-                color: "var(--color-foreground)",
-                "--tw-ring-color": "var(--color-primary)",
-              } as React.CSSProperties
-            }
-          />
-          {habitSearch && (
-            <button
-              onClick={() => setHabitSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Sort dropdown */}
-        <div className="relative">
+      {/* Search */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          value={habitSearch}
+          onChange={(e) => setHabitSearch(e.target.value)}
+          placeholder="Search habits…"
+          className="w-full rounded-xl border py-2 pl-9 pr-9 text-sm outline-none transition-all focus:ring-1"
+          style={
+            {
+              background: "var(--color-card)",
+              borderColor: "oklch(1 0 0 / 0.08)",
+              color: "var(--color-foreground)",
+              "--tw-ring-color": "var(--color-primary)",
+            } as React.CSSProperties
+          }
+        />
+        {habitSearch && (
           <button
-            onClick={() => setSortOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all hover:brightness-110 active:scale-95"
-            style={{
-              background: habitSort !== "default" ? "var(--color-primary)" : "var(--color-card)",
-              color:
-                habitSort !== "default"
-                  ? "var(--color-primary-foreground)"
-                  : "var(--color-muted-foreground)",
-              borderColor: habitSort !== "default" ? "var(--color-primary)" : "oklch(1 0 0 / 0.08)",
-            }}
+            onClick={() => setHabitSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <SortAsc className="size-4" />
-            {sortLabel}
+            <X className="size-3.5" />
           </button>
-          {sortOpen && (
-            <div
-              className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-xl border py-1 shadow-xl"
-              style={{
-                background: "oklch(0.19 0.008 240)",
-                borderColor: "oklch(1 0 0 / 0.1)",
-              }}
-            >
-              {HABIT_SORT_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => {
-                    setHabitSort(o.id);
-                    setSortOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-[oklch(1_0_0_/_0.05)]"
-                  style={{
-                    color: habitSort === o.id ? "var(--color-primary)" : "var(--color-foreground)",
-                  }}
-                >
-                  {o.label}
-                  {habitSort === o.id && (
-                    <span className="size-1.5 rounded-full bg-[var(--color-primary)]" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Section heading */}
@@ -2044,8 +2146,6 @@ function MobileHabits({
   handleDelete,
   habitSearch,
   setHabitSearch,
-  habitSort,
-  setHabitSort,
 }: Pick<
   AppProps,
   | "filter"
@@ -2058,11 +2158,7 @@ function MobileHabits({
   | "handleDelete"
   | "habitSearch"
   | "setHabitSearch"
-  | "habitSort"
-  | "setHabitSort"
 >) {
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortLabel = HABIT_SORT_OPTIONS.find((o) => o.id === habitSort)?.label ?? "Sort";
 
   return (
     <div className="space-y-4 pb-6 pt-5">
@@ -2092,78 +2188,29 @@ function MobileHabits({
         ))}
       </div>
 
-      {/* Search + Sort row */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={habitSearch}
-            onChange={(e) => setHabitSearch(e.target.value)}
-            placeholder="Search habits…"
-            className="w-full rounded-xl border py-2 pl-9 pr-8 text-sm outline-none"
-            style={{
-              background: "var(--color-card)",
-              borderColor: "oklch(1 0 0 / 0.08)",
-              color: "var(--color-foreground)",
-            }}
-          />
-          {habitSearch && (
-            <button
-              onClick={() => setHabitSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Sort button */}
-        <div className="relative">
+      {/* Search */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          value={habitSearch}
+          onChange={(e) => setHabitSearch(e.target.value)}
+          placeholder="Search habits…"
+          className="w-full rounded-xl border py-2 pl-9 pr-8 text-sm outline-none"
+          style={{
+            background: "var(--color-card)",
+            borderColor: "oklch(1 0 0 / 0.08)",
+            color: "var(--color-foreground)",
+          }}
+        />
+        {habitSearch && (
           <button
-            onClick={() => setSortOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all active:scale-95"
-            style={{
-              background: habitSort !== "default" ? "var(--color-primary)" : "var(--color-card)",
-              color:
-                habitSort !== "default"
-                  ? "var(--color-primary-foreground)"
-                  : "var(--color-muted-foreground)",
-              borderColor: habitSort !== "default" ? "var(--color-primary)" : "oklch(1 0 0 / 0.08)",
-            }}
+            onClick={() => setHabitSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           >
-            <SortAsc className="size-4" />
-            <span className="hidden xs:inline">{sortLabel}</span>
+            <X className="size-3.5" />
           </button>
-          {sortOpen && (
-            <div
-              className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-xl border py-1 shadow-xl"
-              style={{
-                background: "oklch(0.19 0.008 240)",
-                borderColor: "oklch(1 0 0 / 0.1)",
-              }}
-            >
-              {HABIT_SORT_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => {
-                    setHabitSort(o.id);
-                    setSortOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-[oklch(1_0_0_/_0.05)]"
-                  style={{
-                    color: habitSort === o.id ? "var(--color-primary)" : "var(--color-foreground)",
-                  }}
-                >
-                  {o.label}
-                  {habitSort === o.id && (
-                    <span className="size-1.5 rounded-full bg-[var(--color-primary)]" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Heading */}
@@ -2290,7 +2337,7 @@ function MobileApp(p: AppProps) {
             </div>
           </div>
         </div>
-        {tab !== "today" && (
+        {tab !== "today" && tab !== "todos" && (
           <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-all active:scale-95"
@@ -2333,6 +2380,7 @@ function MobileApp(p: AppProps) {
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
           {/* TODAY */}
           {tab === "today" && (
+            p.habitsLoading ? <MobileTodaySkeleton /> :
             <div className="space-y-4 pb-6 pt-4">
               {/* Date strip card */}
               <div
@@ -2531,8 +2579,6 @@ function MobileApp(p: AppProps) {
               handleDelete={p.handleDelete}
               habitSearch={p.habitSearch}
               setHabitSearch={p.setHabitSearch}
-              habitSort={p.habitSort}
-              setHabitSort={p.setHabitSort}
             />
           )}
 
@@ -2557,6 +2603,13 @@ function MobileApp(p: AppProps) {
               personalRecords={p.personalRecords}
             />
           )}
+
+          {/* TO-DO */}
+          {tab === "todos" && (
+            <div className="space-y-2 pb-6 pt-4">
+              <TodoList todos={p.todos} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -2580,6 +2633,11 @@ function MobileApp(p: AppProps) {
                 id: "progress" as AppTab,
                 icon: <BarChart3 className="size-5" />,
                 label: "Progress",
+              },
+              {
+                id: "todos" as AppTab,
+                icon: <ClipboardList className="size-5" />,
+                label: "To-Do",
               },
             ] as const
           ).map((t) => {
@@ -3333,7 +3391,7 @@ function EmptyState({ filter }: { filter: FilterId }) {
   );
 }
 
-/* ─── TodayHabitList — manages celebration position-locking ─── */
+/* ─── TodayHabitList ─── */
 function TodayHabitList({
   habits,
   dateKey,
@@ -3349,90 +3407,34 @@ function TodayHabitList({
   emptySlot?: React.ReactNode;
   gridClass?: string;
 }) {
-  const [celebratingIds, setCelebratingIds] = useState<Set<string>>(new Set());
-  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-
-  // When dateKey changes (user switches date), clear all celebration state immediately
-  useEffect(() => {
-    setCelebratingIds(new Set());
-    setExitingIds(new Set());
-  }, [dateKey]);
-
-  const handleToggle = (id: string) => {
-    const h = habits.find((h) => h.id === id);
-    if (!h) return;
-    // Determine direction before calling toggle (Firestore hasn't responded yet)
-    const completing = !(h.track[dateKey]?.done ?? false);
-    onToggle(id);
-    if (completing) {
-      setCelebratingIds((prev) => new Set([...prev, id]));
-      // After 1.1s: start exit animation (card slides down)
-      const exitTimer = setTimeout(() => {
-        setCelebratingIds((prev) => {
-          const n = new Set(prev);
-          n.delete(id);
-          return n;
-        });
-        setExitingIds((prev) => new Set([...prev, id]));
-        // After 380ms: let the list re-sort naturally
-        const clearTimer = setTimeout(() => {
-          setExitingIds((prev) => {
-            const n = new Set(prev);
-            n.delete(id);
-            return n;
-          });
-        }, 380);
-        return () => clearTimeout(clearTimer);
-      }, 1100);
-      return () => clearTimeout(exitTimer);
-    }
-  };
-
   if (habits.length === 0) return <>{emptySlot}</>;
-
-  // Split into buckets: incomplete → celebrating → exiting → completed
-  const incomplete = habits.filter(
-    (h) => !h.track[dateKey]?.done && !celebratingIds.has(h.id) && !exitingIds.has(h.id),
-  );
-  const celebrating = habits.filter((h) => celebratingIds.has(h.id));
-  const exiting = habits.filter((h) => exitingIds.has(h.id));
-  const completed = habits.filter(
-    (h) => h.track[dateKey]?.done && !celebratingIds.has(h.id) && !exitingIds.has(h.id),
-  );
-  const ordered = [...incomplete, ...celebrating, ...exiting, ...completed];
 
   return (
     <div className={gridClass}>
-      {ordered.map((h) => (
+      {habits.map((h) => (
         <TodayHabitRow
           key={h.id}
           habit={h}
           dateKey={dateKey}
-          onToggle={handleToggle}
+          onToggle={onToggle}
           onSaveNote={onSaveNote}
-          isJustCompleted={celebratingIds.has(h.id)}
-          isExiting={exitingIds.has(h.id)}
         />
       ))}
     </div>
   );
 }
 
-/* ─── TodayHabitRow — check-off card with clean celebration architecture ─── */
+/* ─── TodayHabitRow ─── */
 function TodayHabitRow({
   habit: h,
   dateKey,
   onToggle,
   onSaveNote,
-  isJustCompleted = false,
-  isExiting = false,
 }: {
   habit: Habit;
   dateKey: string;
   onToggle: (id: string) => void;
   onSaveNote: (id: string, note: string) => void;
-  isJustCompleted?: boolean;
-  isExiting?: boolean;
 }) {
   const entry = h.track[dateKey];
   const firestoreDone = entry?.done ?? false;
@@ -3467,7 +3469,8 @@ function TodayHabitRow({
   const done = localDone;
 
   // ── Celebration state (UI-only, never persisted) ────────
-  const confetti = useConfetti();
+  const { trigger: triggerConfetti } = useGlobalConfetti();
+  const checkboxRef = useRef<HTMLButtonElement>(null);
   const [glowing, setGlowing] = useState(false);
   const [bouncing, setBouncing] = useState(false);
 
@@ -3505,7 +3508,7 @@ function TodayHabitRow({
     if (completing) {
       setGlowing(true);
       setBouncing(true);
-      confetti.trigger(h.color);
+      triggerConfetti(h.color, checkboxRef.current);
       if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         playCompletionSound();
       }
@@ -3533,7 +3536,6 @@ function TodayHabitRow({
   };
 
   const hasNote = existingNote.trim().length > 0;
-  const badgeDuration = 1100 + 380; // celebrate + exit phases
 
   return (
     <div
@@ -3543,40 +3545,14 @@ function TodayHabitRow({
         background: done ? `${h.color}10` : "var(--color-card)",
         ["--glow-c" as string]: h.color,
         ["--glow-c-dim" as string]: h.color + "40",
-        animation: glowing
-          ? "row-glow 1.35s ease-out forwards"
-          : isExiting
-            ? `card-settle 380ms ease-in forwards`
-            : undefined,
+        animation: glowing ? "row-glow 1.35s ease-out forwards" : undefined,
       }}
     >
-      {/* Confetti canvas overlay */}
-      <canvas
-        ref={confetti.canvasRef}
-        className="pointer-events-none absolute inset-0 z-10"
-        style={{ width: "100%", height: "100%" }}
-      />
-
-      {/* "Completed" celebration badge */}
-      {isJustCompleted && (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-1"
-          style={{ animation: `celebrate-badge ${badgeDuration}ms ease-in-out forwards` }}
-        >
-          <span
-            className="flex items-center gap-1 rounded-full px-3 py-0.5 text-[11px] font-semibold text-white shadow-lg"
-            style={{ background: h.color, boxShadow: `0 2px 12px ${h.color}60` }}
-          >
-            <CheckCircle2 className="size-3" /> Completed
-          </span>
-        </div>
-      )}
-
       {/* Main row */}
       <div className="flex w-full items-center gap-3 p-4">
         {/* Checkbox button */}
         <button
-          ref={confetti.buttonRef}
+          ref={checkboxRef}
           onClick={handleToggle}
           disabled={!inRange}
           className="shrink-0 disabled:opacity-50"

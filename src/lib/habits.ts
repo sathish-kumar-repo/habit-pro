@@ -286,7 +286,6 @@ export function subscribeHabits(cb: (habits: Habit[]) => void): () => void {
   const ref = collection(db, CHALLENGE_COLLECTION);
   return onSnapshot(ref, (snap) => {
     const list = snap.docs.map((d) => fromFirestore(d.id, d.data() as FirestoreChallenge));
-    list.sort((a, b) => b.createdAt - a.createdAt);
     cb(list);
   });
 }

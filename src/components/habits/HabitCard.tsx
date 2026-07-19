@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Habit, progress, streak, today, fmtDate } from "@/lib/habits";
 import { Flame, Trash2, Check, Pencil, CheckCircle2 } from "lucide-react";
 import { HabitIcon } from "./HabitIcon";
-import { useConfetti } from "@/hooks/use-confetti";
+import { useGlobalConfetti } from "@/hooks/use-global-confetti";
 import { playCompletionSound, triggerHaptic } from "@/lib/completion-fx";
 import {
   AlertDialog,
@@ -65,7 +65,8 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
   const grid = buildHeatmap(habit);
 
   // ── Celebration state ────────────────────────────────
-  const confetti = useConfetti();
+  const { trigger: triggerConfetti } = useGlobalConfetti();
+  const todayBtnRef = useRef<HTMLButtonElement>(null);
   const prevDoneRef = useRef(todayDone);
   const [glowing, setGlowing] = useState(false);
   const [bouncing, setBouncing] = useState(false);
@@ -74,7 +75,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
     if (!prevDoneRef.current && todayDone) {
       setGlowing(true);
       setBouncing(true);
-      confetti.trigger(habit.color);
+      triggerConfetti(habit.color, todayBtnRef.current);
       if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         playCompletionSound();
       }
@@ -226,13 +227,6 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* Confetti canvas — full-card overlay */}
-        <canvas
-          ref={confetti.canvasRef}
-          className="pointer-events-none absolute inset-0 z-10"
-          style={{ width: "100%", height: "100%" }}
-        />
-
         {/* Color edge */}
         <span
           className="absolute left-0 top-0 h-full w-[3px]"
@@ -362,7 +356,7 @@ export function HabitCard({ habit, onToggleToday, onOpen, onEdit, onDelete }: Pr
 
             {/* Mark today button */}
             <button
-              ref={confetti.buttonRef}
+              ref={todayBtnRef}
               onClick={() => onToggleToday(habit.id)}
               disabled={!inRange}
               className="flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors active:scale-95 disabled:opacity-40"
