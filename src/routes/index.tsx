@@ -3409,9 +3409,15 @@ function TodayHabitList({
 }) {
   if (habits.length === 0) return <>{emptySlot}</>;
 
+  const sorted = [...habits].sort((a, b) => {
+    const aDone = a.track[dateKey]?.done ? 1 : 0;
+    const bDone = b.track[dateKey]?.done ? 1 : 0;
+    return aDone - bDone;
+  });
+
   return (
     <div className={gridClass}>
-      {habits.map((h) => (
+      {sorted.map((h) => (
         <TodayHabitRow
           key={h.id}
           habit={h}
