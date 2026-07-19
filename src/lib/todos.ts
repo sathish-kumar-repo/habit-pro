@@ -7,6 +7,7 @@ import {
   updateDoc,
   query,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -15,6 +16,7 @@ export type Todo = {
   text: string;
   done: boolean;
   createdAt: number;
+  order?: number;
 };
 
 const TODO_COLLECTION = "todos";
@@ -45,4 +47,13 @@ export async function updateTodoText(id: string, text: string): Promise<void> {
 
 export async function deleteTodo(id: string): Promise<void> {
   await deleteDoc(doc(db, TODO_COLLECTION, id));
+}
+
+/** Persist a new display order by writing an `order` index to each todo. */
+export async function reorderTodos(orderedIds: string[]): Promise<void> {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, TODO_COLLECTION, id), { order: index });
+  });
+  await batch.commit();
 }
