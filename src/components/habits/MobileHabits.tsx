@@ -13,18 +13,32 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 type MobileHabitsProps = Pick<
   AppProps,
-  | "filter" | "setFilter" | "counts" | "filtered"
-  | "toggleToday" | "setOpenId" | "setEditId" | "handleDelete"
-  | "habitSearch" | "setHabitSearch"
+  | "filter"
+  | "setFilter"
+  | "counts"
+  | "filtered"
+  | "toggleToday"
+  | "setOpenId"
+  | "setEditId"
+  | "handleDelete"
+  | "habitSearch"
+  | "setHabitSearch"
 >;
 
 /**
  * Mobile-optimized habits view with touch-friendly scrollable filter pills.
  */
 export function MobileHabits({
-  filter, setFilter, counts, filtered,
-  toggleToday, setOpenId, setEditId, handleDelete,
-  habitSearch, setHabitSearch,
+  filter,
+  setFilter,
+  counts,
+  filtered,
+  toggleToday,
+  setOpenId,
+  setEditId,
+  handleDelete,
+  habitSearch,
+  setHabitSearch,
 }: MobileHabitsProps) {
   return (
     <div className="space-y-4 pb-6 pt-5">
@@ -37,8 +51,16 @@ export function MobileHabits({
             className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all active:scale-95"
             style={
               filter === f.id
-                ? { background: "var(--color-primary)", color: "var(--color-primary-foreground)", borderColor: "var(--color-primary)" }
-                : { borderColor: "oklch(1 0 0 / 0.08)", color: "var(--color-muted-foreground)", background: "var(--color-card)" }
+                ? {
+                    background: "var(--color-primary)",
+                    color: "var(--color-primary-foreground)",
+                    borderColor: "var(--color-primary)",
+                  }
+                : {
+                    borderColor: "oklch(1 0 0 / 0.08)",
+                    color: "var(--color-muted-foreground)",
+                    background: "var(--color-card)",
+                  }
             }
           >
             {f.label}&nbsp;<span className="opacity-60">{counts[f.id]}</span>
@@ -56,10 +78,18 @@ export function MobileHabits({
           placeholder="Search habits…"
           aria-label="Search habits"
           className="w-full rounded-xl border py-2 pl-9 pr-8 text-sm outline-none"
-          style={{ background: "var(--color-card)", borderColor: "oklch(1 0 0 / 0.08)", color: "var(--color-foreground)" }}
+          style={{
+            background: "var(--color-card)",
+            borderColor: "oklch(1 0 0 / 0.08)",
+            color: "var(--color-foreground)",
+          }}
         />
         {habitSearch && (
-          <button onClick={() => setHabitSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+          <button
+            onClick={() => setHabitSearch("")}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          >
             <X className="size-3.5" />
           </button>
         )}
@@ -71,7 +101,9 @@ export function MobileHabits({
           {FILTERS.find((f) => f.id === filter)?.label}
         </h2>
         <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          <span>{filtered.length} {filtered.length === 1 ? "habit" : "habits"}</span>
+          <span>
+            {filtered.length} {filtered.length === 1 ? "habit" : "habits"}
+          </span>
           {habitSearch && <span>· matching "{habitSearch}"</span>}
         </div>
       </div>

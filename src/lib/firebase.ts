@@ -11,7 +11,7 @@ const firebaseConfig = {
   storageBucket: "phonk-me.firebasestorage.app",
   messagingSenderId: "44655979345",
   appId: "1:44655979345:web:3d1008cb479daeec81c170",
-  measurementId: "G-39V118G90Z"
+  measurementId: "G-39V118G90Z",
 };
 
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);

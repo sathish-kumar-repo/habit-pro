@@ -127,7 +127,9 @@ function TodayHabitRow({ habit: h, dateKey, onToggle, onSaveNote }: TodayHabitRo
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { setNoteText(existingNote); }, [existingNote]);
+  useEffect(() => {
+    setNoteText(existingNote);
+  }, [existingNote]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleToggle = () => {
@@ -276,11 +278,17 @@ function TodayHabitRow({ habit: h, dateKey, onToggle, onSaveNote }: TodayHabitRo
             rows={3}
             className="w-full resize-none rounded-xl border border-border bg-[oklch(1_0_0_/_0.03)] px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 transition-colors"
             style={{ ["--tw-ring-color" as string]: h.color }}
-            onKeyDown={(e) => { if (e.key === "Escape") setNoteOpen(false); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setNoteOpen(false);
+            }}
           />
           <div className="mt-2 flex items-center justify-between">
             <button
-              onClick={(e) => { e.stopPropagation(); setNoteOpen(false); setNoteText(existingNote); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setNoteOpen(false);
+                setNoteText(existingNote);
+              }}
               className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-all hover:text-foreground active:scale-95"
             >
               Cancel

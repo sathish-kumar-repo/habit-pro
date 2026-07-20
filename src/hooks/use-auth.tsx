@@ -4,14 +4,7 @@
  * and sign-out to the entire app. Wrap the tree with <AuthProvider />.
  */
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -59,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // User dismissed — not an error
         setError(null);
       } else if (code === "auth/popup-blocked") {
-        setError("Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.");
+        setError(
+          "Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.",
+        );
       } else if (code === "auth/network-request-failed") {
         setError("Network error. Please check your connection and try again.");
       } else {

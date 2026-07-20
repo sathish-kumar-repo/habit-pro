@@ -354,11 +354,7 @@ export async function deleteHabit(uid: string, id: string): Promise<void> {
   await deleteDoc(habitDoc(uid, id));
 }
 
-export async function toggleHabitDay(
-  uid: string,
-  habit: Habit,
-  dayKey: string,
-): Promise<void> {
+export async function toggleHabitDay(uid: string, habit: Habit, dayKey: string): Promise<void> {
   const entry = habit.track[dayKey];
   if (!entry) return;
   const next = { ...habit.track, [dayKey]: { ...entry, done: !entry.done } };

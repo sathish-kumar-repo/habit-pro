@@ -7,7 +7,15 @@
  * @author Sathish Kumar
  */
 
-import { BarChart3, CheckCircle2, ClipboardList, Flame, LayoutGrid, Plus, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  CheckCircle2,
+  ClipboardList,
+  Flame,
+  LayoutGrid,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
 import type { AppTab } from "@/types/app";
@@ -20,10 +28,10 @@ import { DesktopProgress } from "@/components/progress/DesktopProgress";
 import { TodoList } from "@/components/todos/TodoList";
 
 const NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
-  { id: "today",    icon: <CheckCircle2 className="size-5" />, label: "Today"    },
-  { id: "habits",   icon: <LayoutGrid   className="size-5" />, label: "Habits"   },
-  { id: "progress", icon: <BarChart3    className="size-5" />, label: "Progress" },
-  { id: "todos",    icon: <ClipboardList className="size-5" />, label: "To-Do"   },
+  { id: "today", icon: <CheckCircle2 className="size-5" />, label: "Today" },
+  { id: "habits", icon: <LayoutGrid className="size-5" />, label: "Habits" },
+  { id: "progress", icon: <BarChart3 className="size-5" />, label: "Progress" },
+  { id: "todos", icon: <ClipboardList className="size-5" />, label: "To-Do" },
 ];
 
 type DesktopAppProps = AppProps & { user: User; onSignOut: () => void };
@@ -35,7 +43,9 @@ type DesktopAppProps = AppProps & { user: User; onSignOut: () => void };
 export function DesktopApp(p: DesktopAppProps) {
   const { stats, tab, setTab, setAddOpen } = p;
   const todayPct = stats.active ? stats.doneToday / stats.active : 0;
-  const r = 32, circ = 2 * Math.PI * r, dashOff = circ * (1 - todayPct);
+  const r = 32,
+    circ = 2 * Math.PI * r,
+    dashOff = circ * (1 - todayPct);
 
   return (
     <div className="hidden h-screen overflow-hidden bg-background lg:flex">
@@ -51,7 +61,9 @@ export function DesktopApp(p: DesktopAppProps) {
           </div>
           <div>
             <div className="font-display text-[17px] leading-none tracking-tight">Habito</div>
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">daily · tracker</div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+              daily · tracker
+            </div>
           </div>
         </div>
 
@@ -65,7 +77,10 @@ export function DesktopApp(p: DesktopAppProps) {
                 onClick={() => setTab(n.id)}
                 aria-current={active ? "page" : undefined}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-[oklch(1_0_0_/_0.04)]"
-                style={{ background: active ? "oklch(1 0 0 / 0.06)" : undefined, color: active ? "var(--color-foreground)" : "var(--color-muted-foreground)" }}
+                style={{
+                  background: active ? "oklch(1 0 0 / 0.06)" : undefined,
+                  color: active ? "var(--color-foreground)" : "var(--color-muted-foreground)",
+                }}
               >
                 <span style={{ color: active ? "var(--color-primary)" : undefined }}>{n.icon}</span>
                 {n.label}
@@ -86,24 +101,44 @@ export function DesktopApp(p: DesktopAppProps) {
         {/* Progress ring + CTA */}
         <div className="px-4 pb-6 pt-4 space-y-3">
           <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">Today</div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+              Today
+            </div>
             <div className="mt-3 flex items-center gap-3">
               <svg width="72" height="72" viewBox="0 0 72 72" className="shrink-0" aria-hidden>
-                <circle cx="36" cy="36" r={r} fill="none" strokeWidth="5" stroke="oklch(1 0 0 / 0.06)" />
                 <circle
-                  cx="36" cy="36" r={r} fill="none" strokeWidth="5"
+                  cx="36"
+                  cy="36"
+                  r={r}
+                  fill="none"
+                  strokeWidth="5"
+                  stroke="oklch(1 0 0 / 0.06)"
+                />
+                <circle
+                  cx="36"
+                  cy="36"
+                  r={r}
+                  fill="none"
+                  strokeWidth="5"
                   stroke="var(--color-primary)"
-                  strokeDasharray={circ} strokeDashoffset={dashOff}
-                  strokeLinecap="round" transform="rotate(-90 36 36)"
+                  strokeDasharray={circ}
+                  strokeDashoffset={dashOff}
+                  strokeLinecap="round"
+                  transform="rotate(-90 36 36)"
                   style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)" }}
                 />
               </svg>
               <div>
                 <div className="font-display text-3xl leading-none text-foreground">
-                  {stats.doneToday}<span className="text-base text-muted-foreground">/{stats.active}</span>
+                  {stats.doneToday}
+                  <span className="text-base text-muted-foreground">/{stats.active}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {stats.active === 0 ? "No active habits" : stats.doneToday === stats.active ? "All done! 🎉" : `${stats.active - stats.doneToday} remaining`}
+                  {stats.active === 0
+                    ? "No active habits"
+                    : stats.doneToday === stats.active
+                      ? "All done! 🎉"
+                      : `${stats.active - stats.doneToday} remaining`}
                 </div>
               </div>
             </div>
@@ -123,25 +158,61 @@ export function DesktopApp(p: DesktopAppProps) {
         {/* Top bar */}
         <header
           className="flex shrink-0 items-center justify-between px-8 py-4 xl:px-10"
-          style={{ background: "oklch(0.155 0.008 240 / 0.8)", backdropFilter: "blur(12px)", borderBottom: "1px solid oklch(1 0 0 / 0.07)" }}
+          style={{
+            background: "oklch(0.155 0.008 240 / 0.8)",
+            backdropFilter: "blur(12px)",
+            borderBottom: "1px solid oklch(1 0 0 / 0.07)",
+          }}
         >
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               {tab === "today"
                 ? p.selectedDateKey === fmtDate(new Date())
-                  ? new Date().toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })
-                  : p.selectedDate.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })
-                : new Date().toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })}
+                  ? new Date().toLocaleDateString("en", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  : p.selectedDate.toLocaleDateString("en", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })
+                : new Date().toLocaleDateString("en", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  })}
             </div>
             <h1 className="mt-0.5 font-display text-2xl leading-none text-foreground xl:text-3xl">
-              {{ today: "Today's Focus", habits: "My Habits", progress: "My Progress", todos:"To-Do" }[tab]}
+              {
+                {
+                  today: "Today's Focus",
+                  habits: "My Habits",
+                  progress: "My Progress",
+                  todos: "To-Do",
+                }[tab]
+              }
             </h1>
           </div>
           <div className="flex items-center gap-5">
             <div className="hidden items-center gap-6 xl:flex" aria-label="Summary stats">
-              <QuickStat icon={<LayoutGrid className="size-3.5" />} label="Total" value={stats.total.toString()} />
-              <QuickStat icon={<Flame className="size-3.5" />}     label="Streak" value={`${stats.bestStreak}d`} accent />
-              <QuickStat icon={<TrendingUp className="size-3.5" />} label="Avg"   value={`${stats.avg}%`} />
+              <QuickStat
+                icon={<LayoutGrid className="size-3.5" />}
+                label="Total"
+                value={stats.total.toString()}
+              />
+              <QuickStat
+                icon={<Flame className="size-3.5" />}
+                label="Streak"
+                value={`${stats.bestStreak}d`}
+                accent
+              />
+              <QuickStat
+                icon={<TrendingUp className="size-3.5" />}
+                label="Avg"
+                value={`${stats.avg}%`}
+              />
             </div>
             <UserMenu user={p.user} onSignOut={p.onSignOut} />
           </div>
@@ -149,10 +220,10 @@ export function DesktopApp(p: DesktopAppProps) {
 
         {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto px-8 py-6 xl:px-10 xl:py-8">
-          {tab === "today"    && <DesktopToday    {...p} />}
-          {tab === "habits"   && <DesktopHabits   {...p} />}
+          {tab === "today" && <DesktopToday {...p} />}
+          {tab === "habits" && <DesktopHabits {...p} />}
           {tab === "progress" && <DesktopProgress {...p} />}
-          {tab === "todos"    && (
+          {tab === "todos" && (
             <div className="mx-auto max-w-2xl space-y-2">
               <h2 className="text-lg font-semibold tracking-tight">To-Do List</h2>
               <TodoList todos={p.todos} />

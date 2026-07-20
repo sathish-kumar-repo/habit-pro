@@ -121,10 +121,14 @@ export function useAppData(uid: string) {
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
       const key = fmtDate(d);
-      let done = 0, total = 0;
+      let done = 0,
+        total = 0;
       habits.forEach((h) => {
         const e = h.track[key];
-        if (e) { total++; if (e.done) done++; }
+        if (e) {
+          total++;
+          if (e.done) done++;
+        }
       });
       out.push({ key, label: d.toLocaleDateString("en", { weekday: "short" })[0], done, total });
     }
@@ -138,10 +142,14 @@ export function useAppData(uid: string) {
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
       const key = fmtDate(d);
-      let done = 0, total = 0;
+      let done = 0,
+        total = 0;
       habits.forEach((h) => {
         const e = h.track[key];
-        if (e) { total++; if (e.done) done++; }
+        if (e) {
+          total++;
+          if (e.done) done++;
+        }
       });
       const isWeekStart = d.getDay() === 0;
       out.push({
@@ -155,14 +163,19 @@ export function useAppData(uid: string) {
   }, [habits]);
 
   const rollupMonthly = useMemo(() => {
-    const monthMap: Record<string, { done: number; total: number; label: string; sortKey: string }> = {};
+    const monthMap: Record<
+      string,
+      { done: number; total: number; label: string; sortKey: string }
+    > = {};
     habits.forEach((h) => {
       Object.entries(h.track).forEach(([, e]) => {
         const d = e.date;
         const sortKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
         if (!monthMap[sortKey]) {
           monthMap[sortKey] = {
-            done: 0, total: 0, sortKey,
+            done: 0,
+            total: 0,
+            sortKey,
             label: d.toLocaleString("en", { month: "short", year: "2-digit" }),
           };
         }
@@ -200,7 +213,8 @@ export function useAppData(uid: string) {
 
   const periodComparison = useMemo(() => {
     const compute = (offset: number, window: number) => {
-      let done = 0, total = 0;
+      let done = 0,
+        total = 0;
       for (let i = offset; i < offset + window; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
@@ -208,13 +222,18 @@ export function useAppData(uid: string) {
         const key = fmtDate(d);
         habits.forEach((h) => {
           const e = h.track[key];
-          if (e) { total++; if (e.done) done++; }
+          if (e) {
+            total++;
+            if (e.done) done++;
+          }
         });
       }
       return total ? Math.round((done / total) * 100) : 0;
     };
-    const this7 = compute(0, 7), last7 = compute(7, 7);
-    const this30 = compute(0, 30), last30 = compute(30, 30);
+    const this7 = compute(0, 7),
+      last7 = compute(7, 7);
+    const this30 = compute(0, 30),
+      last30 = compute(30, 30);
     return { this7, last7, delta7: this7 - last7, this30, last30, delta30: this30 - last30 };
   }, [habits]);
 
@@ -228,11 +247,14 @@ export function useAppData(uid: string) {
       });
     });
     let bestDayCount = 0;
-    Object.values(dayMap).forEach(({ done }) => { if (done > bestDayCount) bestDayCount = done; });
+    Object.values(dayMap).forEach(({ done }) => {
+      if (done > bestDayCount) bestDayCount = done;
+    });
     const allKeys = Object.keys(dayMap).sort();
     let bestWeekPct = 0;
     for (let i = 0; i <= allKeys.length - 7; i++) {
-      let done = 0, total = 0;
+      let done = 0,
+        total = 0;
       for (let j = i; j < Math.min(i + 7, allKeys.length); j++) {
         done += dayMap[allKeys[j]].done;
         total += dayMap[allKeys[j]].total;
@@ -245,13 +267,17 @@ export function useAppData(uid: string) {
       );
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      let m = 0, cur = 0;
+      let m = 0,
+        cur = 0;
       for (const key of keys) {
         const e = h.track[key];
         const d = new Date(e.date);
         d.setHours(0, 0, 0, 0);
         if (d > now) break;
-        if (e.done) { cur++; m = Math.max(m, cur); } else cur = 0;
+        if (e.done) {
+          cur++;
+          m = Math.max(m, cur);
+        } else cur = 0;
       }
       return Math.max(max, m);
     }, 0);
@@ -280,20 +306,32 @@ export function useAppData(uid: string) {
       );
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      let maxStreak = 0, curSt = 0;
+      let maxStreak = 0,
+        curSt = 0;
       for (const key of keys) {
         const e = h.track[key];
         const d = new Date(e.date);
         d.setHours(0, 0, 0, 0);
         if (d > now) break;
-        if (e.done) { curSt++; maxStreak = Math.max(maxStreak, curSt); } else curSt = 0;
+        if (e.done) {
+          curSt++;
+          maxStreak = Math.max(maxStreak, curSt);
+        } else curSt = 0;
       }
       const lastKey = keys[keys.length - 1];
       const end = lastKey ? new Date(h.track[lastKey].date) : now;
       end.setHours(0, 0, 0, 0);
       const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
       const { done, total, pct } = progress(h);
-      return { habit: h, longestStreak: maxStreak, daysRemaining, done, total, pct, currentStreak: streak(h) };
+      return {
+        habit: h,
+        longestStreak: maxStreak,
+        daysRemaining,
+        done,
+        total,
+        pct,
+        currentStreak: streak(h),
+      };
     });
   }, [habits]);
 
@@ -336,15 +374,50 @@ export function useAppData(uid: string) {
   const editHabit = habits.find((h) => h.id === editId) ?? null;
 
   return {
-    habits, filter, setFilter, openId, setOpenId, editId, setEditId,
-    addOpen, setAddOpen, tab, setTab, counts, filtered, stats,
-    rollup, rollup30, rollupMonthly, todayHabits, handleDelete,
-    toggleToday, toggleDay, saveNote, openHabit, editHabit,
-    progressRange, setProgressRange, progressSort, setProgressSort,
-    habitSearch, setHabitSearch, weekdayStats, periodComparison,
-    personalRecords, consistencyScore, perHabitExtended,
-    selectedDate, setSelectedDate, selectedDateKey, statsForSelectedDate,
-    todos, habitsLoading, habitsError, todosLoading, todosError,
+    habits,
+    filter,
+    setFilter,
+    openId,
+    setOpenId,
+    editId,
+    setEditId,
+    addOpen,
+    setAddOpen,
+    tab,
+    setTab,
+    counts,
+    filtered,
+    stats,
+    rollup,
+    rollup30,
+    rollupMonthly,
+    todayHabits,
+    handleDelete,
+    toggleToday,
+    toggleDay,
+    saveNote,
+    openHabit,
+    editHabit,
+    progressRange,
+    setProgressRange,
+    progressSort,
+    setProgressSort,
+    habitSearch,
+    setHabitSearch,
+    weekdayStats,
+    periodComparison,
+    personalRecords,
+    consistencyScore,
+    perHabitExtended,
+    selectedDate,
+    setSelectedDate,
+    selectedDateKey,
+    statsForSelectedDate,
+    todos,
+    habitsLoading,
+    habitsError,
+    todosLoading,
+    todosError,
   };
 }
 

@@ -39,13 +39,20 @@ export function DateStrip({ habits, selectedDate, setSelectedDate }: DateStripPr
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
       const key = fmtDate(d);
-      let done = 0, total = 0;
+      let done = 0,
+        total = 0;
       habits.forEach((h) => {
         const e = h.track[key];
-        if (e) { total++; if (e.done) done++; }
+        if (e) {
+          total++;
+          if (e.done) done++;
+        }
       });
       return {
-        date: d, key, done, total,
+        date: d,
+        key,
+        done,
+        total,
         isToday: d.getTime() === todayDate.getTime(),
         isFuture: d > todayDate,
         isSelected: fmtDate(d) === fmtDate(selectedDate),
@@ -113,7 +120,11 @@ export function DateStrip({ habits, selectedDate, setSelectedDate }: DateStripPr
               key={d.key}
               disabled={d.isFuture}
               onClick={() => setSelectedDate(d.date)}
-              aria-label={d.date.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" })}
+              aria-label={d.date.toLocaleDateString("en", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
               aria-pressed={d.isSelected}
               className="flex flex-1 min-w-[40px] flex-col items-center gap-1 rounded-2xl py-2.5 px-1 transition-all active:scale-95"
               style={{
@@ -128,14 +139,20 @@ export function DateStrip({ habits, selectedDate, setSelectedDate }: DateStripPr
             >
               <span
                 className="font-mono text-[9px] uppercase tracking-[0.1em]"
-                style={{ color: d.isSelected ? "oklch(1 0 0 / 0.75)" : "var(--color-muted-foreground)" }}
+                style={{
+                  color: d.isSelected ? "oklch(1 0 0 / 0.75)" : "var(--color-muted-foreground)",
+                }}
               >
                 {DAY_NAMES[idx]}
               </span>
               <span
                 className="font-display text-lg leading-none"
                 style={{
-                  color: d.isSelected ? "white" : d.isToday ? "var(--color-primary)" : "var(--color-foreground)",
+                  color: d.isSelected
+                    ? "white"
+                    : d.isToday
+                      ? "var(--color-primary)"
+                      : "var(--color-foreground)",
                   fontWeight: d.isToday || d.isSelected ? 700 : 500,
                 }}
               >
@@ -144,20 +161,29 @@ export function DateStrip({ habits, selectedDate, setSelectedDate }: DateStripPr
               {d.total > 0 ? (
                 <div
                   className="relative h-1 w-5 overflow-hidden rounded-full"
-                  style={{ background: d.isSelected ? "oklch(1 0 0 / 0.25)" : "oklch(1 0 0 / 0.08)" }}
+                  style={{
+                    background: d.isSelected ? "oklch(1 0 0 / 0.25)" : "oklch(1 0 0 / 0.08)",
+                  }}
                 >
                   <div
                     className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
                     style={{
                       width: `${completionPct * 100}%`,
-                      background: d.isSelected ? "white" : allDone ? "var(--color-primary)" : "oklch(0.75 0.15 158 / 0.8)",
+                      background: d.isSelected
+                        ? "white"
+                        : allDone
+                          ? "var(--color-primary)"
+                          : "oklch(0.75 0.15 158 / 0.8)",
                     }}
                   />
                 </div>
               ) : (
                 <div
                   className="h-1 w-1.5 rounded-full"
-                  style={{ background: d.isToday && !d.isSelected ? "var(--color-primary)" : "oklch(1 0 0 / 0.12)" }}
+                  style={{
+                    background:
+                      d.isToday && !d.isSelected ? "var(--color-primary)" : "oklch(1 0 0 / 0.12)",
+                  }}
                 />
               )}
             </button>

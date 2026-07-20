@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Todo, createTodo, toggleTodo, deleteTodo, updateTodoText, reorderTodos } from "@/lib/todos";
+import {
+  Todo,
+  createTodo,
+  toggleTodo,
+  deleteTodo,
+  updateTodoText,
+  reorderTodos,
+} from "@/lib/todos";
 import { Plus, Trash2, Check, ClipboardList, Pencil, GripVertical } from "lucide-react";
 import { useGlobalConfetti } from "@/hooks/use-global-confetti";
 import { useAuth } from "@/hooks/use-auth";
@@ -76,7 +83,11 @@ export function TodoList({ todos }: Props) {
   const done = todos.filter((t) => t.done);
 
   const visible =
-    filter === "all" ? ordered : filter === "active" ? ordered.filter((t) => !t.done) : ordered.filter((t) => t.done);
+    filter === "all"
+      ? ordered
+      : filter === "active"
+        ? ordered.filter((t) => !t.done)
+        : ordered.filter((t) => t.done);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -153,10 +164,16 @@ export function TodoList({ todos }: Props) {
                 style={{
                   background: filter === f ? "var(--color-primary)" : "oklch(1 0 0 / 0.05)",
                   color:
-                    filter === f ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
+                    filter === f
+                      ? "var(--color-primary-foreground)"
+                      : "var(--color-muted-foreground)",
                 }}
               >
-                {f === "all" ? `All ${todos.length}` : f === "active" ? `Active ${active.length}` : `Done ${done.length}`}
+                {f === "all"
+                  ? `All ${todos.length}`
+                  : f === "active"
+                    ? `Active ${active.length}`
+                    : `Done ${done.length}`}
               </button>
             ))}
           </div>

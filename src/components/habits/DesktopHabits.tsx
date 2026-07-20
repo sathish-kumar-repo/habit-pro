@@ -38,8 +38,16 @@ export function DesktopHabits({
             className="rounded-full border px-4 py-2 text-sm font-medium transition-all hover:brightness-110 active:scale-95"
             style={
               filter === f.id
-                ? { background: "var(--color-primary)", color: "var(--color-primary-foreground)", borderColor: "var(--color-primary)" }
-                : { borderColor: "oklch(1 0 0 / 0.08)", color: "var(--color-muted-foreground)", background: "var(--color-card)" }
+                ? {
+                    background: "var(--color-primary)",
+                    color: "var(--color-primary-foreground)",
+                    borderColor: "var(--color-primary)",
+                  }
+                : {
+                    borderColor: "oklch(1 0 0 / 0.08)",
+                    color: "var(--color-muted-foreground)",
+                    background: "var(--color-card)",
+                  }
             }
           >
             {f.label} <span className="opacity-60">{counts[f.id]}</span>

@@ -13,7 +13,8 @@ export function AuthLoadingScreen() {
           className="flex size-14 items-center justify-center overflow-hidden rounded-[16px]"
           style={{
             background: "oklch(0.19 0.008 240)",
-            boxShadow: "0 0 0 1px oklch(1 0 0 / 0.07), 0 12px 32px -8px oklch(0.74 0.16 158 / 0.25)",
+            boxShadow:
+              "0 0 0 1px oklch(1 0 0 / 0.07), 0 12px 32px -8px oklch(0.74 0.16 158 / 0.25)",
           }}
         >
           <img src="/logo.png" alt="Habito" className="size-full object-cover" />
@@ -28,8 +29,19 @@ export function AuthLoadingScreen() {
             aria-hidden="true"
             style={{ color: "oklch(0.74 0.16 158)" }}
           >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
           </svg>
           <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
             Loading
