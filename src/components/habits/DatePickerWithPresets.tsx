@@ -43,7 +43,7 @@ export function DatePickerWithPresets({ value, onChange, label, minDate, error }
             )}
           >
             <CalendarIcon className="mr-2 size-4" />
-            {value ? format(value, "PPP") : <span>Pick a date</span>}
+            {value ? format(value, "MMM d, yyyy") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto overflow-hidden p-0" align="start">
