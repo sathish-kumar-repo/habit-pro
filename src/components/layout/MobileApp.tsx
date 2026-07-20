@@ -6,9 +6,8 @@
  * @author Sathish Kumar
  */
 
-import { useRef, useState } from "react";
 import {
-  BarChart3, CheckCircle2, ClipboardList, LayoutGrid, Plus, RefreshCw,
+  BarChart3, CheckCircle2, ClipboardList, LayoutGrid, Plus, 
 } from "lucide-react";
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
@@ -42,32 +41,10 @@ export function MobileApp(p: MobileAppProps) {
     todayHabits, rollup, toggleToday, saveNote, setOpenId, setEditId, handleDelete,
   } = p;
 
-  const [pullY, setPullY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const pullStartY = useRef(0);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const PULL_THRESHOLD = 72;
 
   const r = 38, circ = 2 * Math.PI * r;
   const todayPct = stats.active ? stats.doneToday / stats.active : 0;
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    if (!contentRef.current || contentRef.current.scrollTop > 0) return;
-    pullStartY.current = e.touches[0].clientY;
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (refreshing || !contentRef.current || contentRef.current.scrollTop > 0) return;
-    const dy = e.touches[0].clientY - pullStartY.current;
-    if (dy > 0) setPullY(Math.min(dy * 0.5, PULL_THRESHOLD + 20));
-  };
-  const onTouchEnd = () => {
-    if (pullY >= PULL_THRESHOLD) {
-      setRefreshing(true);
-      setTimeout(() => { setRefreshing(false); setPullY(0); }, 1200);
-    } else {
-      setPullY(0);
-    }
-  };
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background lg:hidden">
@@ -106,26 +83,12 @@ export function MobileApp(p: MobileAppProps) {
         </div>
       </header>
 
-      {/* Pull-to-refresh */}
-      <div
-        className="flex shrink-0 items-center justify-center overflow-hidden transition-all duration-200"
-        style={{ height: pullY > 0 ? `${pullY}px` : refreshing ? "44px" : "0px" }}
-        aria-live="polite"
-      >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <RefreshCw className="size-3.5" style={{ color: "var(--color-primary)", animation: refreshing ? "spin 1s linear infinite" : "none" }} />
-          {refreshing ? "Syncing…" : pullY >= PULL_THRESHOLD ? "Release to refresh" : "Pull to refresh"}
-        </div>
-      </div>
-
       {/* Scrollable content */}
       <div
-        ref={contentRef}
+        
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+      
       >
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
           {/* TODAY */}
