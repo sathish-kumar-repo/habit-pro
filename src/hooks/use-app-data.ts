@@ -21,7 +21,7 @@ import {
   streak,
   fmtDate,
 } from "@/lib/habits";
-import { Todo, subscribeTodos } from "@/lib/todos";
+import { Todo, Category, subscribeTodos, subscribeCategories } from "@/lib/todos";
 import type { FilterId, AppTab, ProgressRange, ProgressSort } from "@/types/app";
 
 export function useAppData(uid: string) {
@@ -32,6 +32,9 @@ export function useAppData(uid: string) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todosLoading, setTodosLoading] = useState(true);
   const [todosError, setTodosError] = useState<string | null>(null);
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   const [filter, setFilter] = useState<FilterId>("ongoing");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -82,6 +85,17 @@ export function useAppData(uid: string) {
         setTodosLoading(false);
       },
     );
+    return unsub;
+  }, [uid]);
+
+  // Subscribe to the authenticated user's categories
+  useEffect(() => {
+    if (!uid) return;
+    setCategoriesLoading(true);
+    const unsub = subscribeCategories(uid, (data) => {
+      setCategories(data);
+      setCategoriesLoading(false);
+    });
     return unsub;
   }, [uid]);
 
@@ -414,6 +428,8 @@ export function useAppData(uid: string) {
     selectedDateKey,
     statsForSelectedDate,
     todos,
+    categories,
+    categoriesLoading,
     habitsLoading,
     habitsError,
     todosLoading,

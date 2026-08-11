@@ -6,7 +6,7 @@
  * @author Sathish Kumar
  */
 
-import { BarChart3, CheckCircle2, ClipboardList, LayoutGrid, Plus } from "lucide-react";
+import { ChartBar as BarChart3, CircleCheck as CheckCircle2, ClipboardList, LayoutGrid, Plus } from "lucide-react";
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
 import type { AppTab } from "@/types/app";
@@ -332,10 +332,17 @@ export function MobileApp(p: MobileAppProps) {
             />
           )}
 
-          {/* TO-DO */}
           {tab === "todos" && (
-            <div className="space-y-2 pb-6 pt-4">
-              <TodoList todos={p.todos} />
+            <div className="space-y-4 pb-6 pt-2">
+              <div>
+                <h2 className="font-display text-xl font-light tracking-tight text-foreground">
+                  To-Do List
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Organize tasks, track progress, and stay on top of your day.
+                </p>
+              </div>
+              <TodoList todos={p.todos} categories={p.categories} />
             </div>
           )}
         </div>

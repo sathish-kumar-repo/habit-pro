@@ -7,15 +7,7 @@
  * @author Sathish Kumar
  */
 
-import {
-  BarChart3,
-  CheckCircle2,
-  ClipboardList,
-  Flame,
-  LayoutGrid,
-  Plus,
-  TrendingUp,
-} from "lucide-react";
+import { ChartBar as BarChart3, CircleCheck as CheckCircle2, ClipboardList, Flame, LayoutGrid, Plus, TrendingUp } from "lucide-react";
 import { fmtDate } from "@/lib/habits";
 import type { AppProps } from "@/hooks/use-app-data";
 import type { AppTab } from "@/types/app";
@@ -224,9 +216,16 @@ export function DesktopApp(p: DesktopAppProps) {
           {tab === "habits" && <DesktopHabits {...p} />}
           {tab === "progress" && <DesktopProgress {...p} />}
           {tab === "todos" && (
-            <div className="mx-auto max-w-2xl space-y-2">
-              <h2 className="text-lg font-semibold tracking-tight">To-Do List</h2>
-              <TodoList todos={p.todos} />
+            <div className="mx-auto max-w-2xl space-y-5">
+              <div>
+                <h2 className="font-display text-2xl font-light tracking-tight text-foreground">
+                  To-Do List
+                </h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Organize tasks, track progress, and stay on top of your day.
+                </p>
+              </div>
+              <TodoList todos={p.todos} categories={p.categories} />
             </div>
           )}
         </main>

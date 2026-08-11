@@ -1,117 +1,132 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Todo,
+  Category,
   createTodo,
-  toggleTodo,
   deleteTodo,
-  updateTodoText,
   reorderTodos,
 } from "@/lib/todos";
-import { Plus, Trash2, Check, ClipboardList, Pencil, GripVertical } from "lucide-react";
-import { useGlobalConfetti } from "@/hooks/use-global-confetti";
+import {
+  Plus,
+  Trash2,
+  ClipboardList,
+  Tag,
+  Settings2,
+  Check,
+  Circle,
+  ListTodo,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-
-const TODO_CONFETTI_COLOR = "#10b981";
+import { CategoryPicker } from "./CategoryPicker";
+import { CategoryManager } from "./CategoryManager";
+import { TodoItem } from "./TodoItem";
+import { cn } from "@/lib/utils";
 
 type Filter = "all" | "active" | "done";
+type GroupMode = "none" | "category";
 
 type Props = {
   todos: Todo[];
+  categories: Category[];
 };
 
-// ---------------------------------------------------------------------------
-// Done sound — generated via Web Audio API, no audio file required
-// ---------------------------------------------------------------------------
-function playDoneSound() {
-  try {
-    const ctx = new AudioContext();
-    const notes = [523.25, 659.25, 783.99]; // C5 → E5 → G5
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = "sine";
-      const start = ctx.currentTime + i * 0.1;
-      osc.frequency.setValueAtTime(freq, start);
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
-      osc.start(start);
-      osc.stop(start + 0.35);
-    });
-  } catch {
-    // AudioContext not available (e.g. SSR) — silently skip
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers for merging Firestore updates with local drag order
-// ---------------------------------------------------------------------------
 function mergeIds(localIds: string[], incoming: Todo[]): string[] {
   const incomingIds = incoming.map((t) => t.id);
   const incomingSet = new Set(incomingIds);
-  // Keep existing local order, remove deleted
   const kept = localIds.filter((id) => incomingSet.has(id));
   const keptSet = new Set(kept);
-  // Prepend any brand-new ids
   const added = incomingIds.filter((id) => !keptSet.has(id));
   return [...added, ...kept];
 }
 
-export function TodoList({ todos }: Props) {
+export function TodoList({ todos, categories }: Props) {
   const { user } = useAuth();
+  const uid = user?.uid ?? "";
   const [input, setInput] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
 
-  // Local ordering state — drives display order, synced to Firestore on drop
+  const [newTodoCategoryId, setNewTodoCategoryId] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | "all">("all");
+  const [groupMode, setGroupMode] = useState<GroupMode>("none");
+  const [managerOpen, setManagerOpen] = useState(false);
+
   const [localIds, setLocalIds] = useState<string[]>([]);
 
-  // Sync localIds when Firestore todos change
   useEffect(() => {
-    setLocalIds((prev) => (prev.length === 0 ? todos.map((t) => t.id) : mergeIds(prev, todos)));
+    setLocalIds((prev) =>
+      prev.length === 0 ? todos.map((t) => t.id) : mergeIds(prev, todos),
+    );
   }, [todos]);
 
-  // Build a map for O(1) lookup
   const todoMap = new Map(todos.map((t) => [t.id, t]));
-
-  // Ordered list respecting localIds
   const ordered = localIds.map((id) => todoMap.get(id)).filter(Boolean) as Todo[];
 
   const active = todos.filter((t) => !t.done);
   const done = todos.filter((t) => t.done);
+  const completionRate = todos.length > 0 ? Math.round((done.length / todos.length) * 100) : 0;
 
-  const visible =
+  const statusFiltered =
     filter === "all"
       ? ordered
       : filter === "active"
         ? ordered.filter((t) => !t.done)
         : ordered.filter((t) => t.done);
 
+  const categoryFiltered =
+    activeCategory === "all"
+      ? statusFiltered
+      : statusFiltered.filter((t) => t.categoryId === activeCategory);
+
+  const groups = useMemo(() => {
+    if (groupMode === "none") {
+      return [{ label: null, items: categoryFiltered }] as {
+        label: string | null;
+        color?: string;
+        items: Todo[];
+      }[];
+    }
+    const byCat = new Map<string | null, Todo[]>();
+    for (const t of categoryFiltered) {
+      const key = t.categoryId ?? null;
+      const arr = byCat.get(key) ?? [];
+      arr.push(t);
+      byCat.set(key, arr);
+    }
+    const result: { label: string | null; color?: string; items: Todo[] }[] = [];
+    for (const cat of categories) {
+      const items = byCat.get(cat.id);
+      if (items?.length) result.push({ label: cat.name, color: cat.color, items });
+    }
+    const uncategorized = byCat.get(null);
+    if (uncategorized?.length) result.push({ label: "Uncategorized", items: uncategorized });
+    return result;
+  }, [categoryFiltered, groupMode, categories]);
+
+  const visible = categoryFiltered;
+  const hasCategories = categories.length > 0;
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || !user) return;
+    if (!text || !uid) return;
     setInput("");
     setAdding(true);
     try {
-      await createTodo(user.uid, text);
+      await createTodo(uid, text, newTodoCategoryId);
     } finally {
       setAdding(false);
     }
   }
 
   async function handleClearDone() {
-    if (!user) return;
-    await Promise.all(done.map((t) => deleteTodo(user.uid, t.id)));
+    if (!uid) return;
+    await Promise.all(done.map((t) => deleteTodo(uid, t.id)));
   }
 
-  // Called by TodoItem when a drag-drop reorder completes
   const handleReorder = useCallback(
     (dragId: string, overId: string) => {
-      if (!user) return;
-      const uid = user.uid;
+      if (!uid) return;
       setLocalIds((prev) => {
         const next = [...prev];
         const from = next.indexOf(dragId);
@@ -119,22 +134,85 @@ export function TodoList({ todos }: Props) {
         if (from === -1 || to === -1 || from === to) return prev;
         next.splice(from, 1);
         next.splice(to, 0, dragId);
-        // Persist to Firestore (fire-and-forget)
         reorderTodos(uid, next).catch(console.error);
         return next;
       });
     },
-    [user],
+    [uid],
   );
 
+  const filterTabs: { id: Filter; label: string; count: number; icon: typeof Circle }[] = [
+    { id: "all", label: "All", count: todos.length, icon: ListTodo },
+    { id: "active", label: "Active", count: active.length, icon: Circle },
+    { id: "done", label: "Done", count: done.length, icon: Check },
+  ];
+
   return (
-    <div className="space-y-4">
-      {/* Add form */}
+    <div className="space-y-5">
+      {/* ── Progress header card ─────────────────────────────────────────── */}
+      {todos.length > 0 && (
+        <div
+          className="glass overflow-hidden rounded-2xl p-5"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Progress
+              </p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-display text-3xl font-light tabular-nums text-foreground">
+                  {completionRate}
+                  <span className="text-lg text-muted-foreground">%</span>
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {done.length} of {todos.length} done
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-6 text-right">
+              <div>
+                <p className="font-display text-xl font-light tabular-nums text-foreground">
+                  {active.length}
+                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Remaining
+                </p>
+              </div>
+              <div>
+                <p className="font-display text-xl font-light tabular-nums text-foreground">
+                  {done.length}
+                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Completed
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full" style={{ background: "oklch(1 0 0 / 0.06)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${completionRate}%`,
+                background: "linear-gradient(90deg, var(--color-primary), oklch(0.82 0.13 80))",
+                boxShadow: "0 0 12px oklch(0.74 0.16 158 / 0.4)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Add task form ───────────────────────────────────────────────── */}
       <form
         onSubmit={handleAdd}
-        className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3"
+        className="glass flex items-center gap-2.5 rounded-2xl px-4 py-3.5"
         style={{ boxShadow: "var(--shadow-soft)" }}
       >
+        <Plus
+          className="size-4 shrink-0 text-muted-foreground"
+          style={{ color: adding ? "var(--color-primary)" : undefined }}
+        />
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -142,262 +220,235 @@ export function TodoList({ todos }: Props) {
           className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           disabled={adding}
         />
+        {hasCategories && (
+          <CategoryPicker
+            categories={categories}
+            selectedId={newTodoCategoryId}
+            onSelect={setNewTodoCategoryId}
+            onManage={() => setManagerOpen(true)}
+          />
+        )}
         <button
           type="submit"
           disabled={adding || !input.trim()}
-          className="flex size-8 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 disabled:opacity-40"
-          style={{ background: "var(--color-primary)", color: "var(--color-primary-foreground)" }}
+          className="flex size-8 shrink-0 items-center justify-center rounded-xl transition-all active:scale-90 disabled:opacity-30"
+          style={{
+            background: "var(--color-primary)",
+            color: "var(--color-primary-foreground)",
+            boxShadow: "var(--shadow-soft)",
+          }}
         >
-          <Plus className="size-4" />
+          <Plus className="size-4" strokeWidth={2.5} />
         </button>
       </form>
 
-      {/* Filter pills + clear */}
+      {/* ── Toolbar: filter tabs + actions ──────────────────────────────── */}
       {todos.length > 0 && (
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1">
-            {(["all", "active", "done"] as Filter[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className="rounded-full px-3 py-1 text-xs font-medium capitalize transition-all"
-                style={{
-                  background: filter === f ? "var(--color-primary)" : "oklch(1 0 0 / 0.05)",
-                  color:
-                    filter === f
-                      ? "var(--color-primary-foreground)"
-                      : "var(--color-muted-foreground)",
-                }}
-              >
-                {f === "all"
-                  ? `All ${todos.length}`
-                  : f === "active"
-                    ? `Active ${active.length}`
-                    : `Done ${done.length}`}
-              </button>
-            ))}
-          </div>
-          {done.length > 0 && (
-            <button
-              onClick={handleClearDone}
-              className="rounded-full px-3 py-1 text-xs text-muted-foreground transition-all hover:text-foreground"
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            {/* Segmented filter */}
+            <div
+              className="flex gap-0.5 rounded-xl p-1"
+              style={{ background: "oklch(1 0 0 / 0.04)" }}
             >
-              Clear done
-            </button>
+              {filterTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = filter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFilter(tab.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
+                      isActive ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                    style={{
+                      background: isActive ? "var(--color-primary)" : "transparent",
+                      boxShadow: isActive ? "var(--shadow-soft)" : "none",
+                    }}
+                  >
+                    <Icon className="size-3" />
+                    {tab.label}
+                    <span
+                      className="tabular-nums"
+                      style={{ opacity: isActive ? 0.7 : 0.5 }}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {hasCategories && (
+                <button
+                  onClick={() => setGroupMode((g) => (g === "none" ? "category" : "none"))}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all active:scale-95",
+                    groupMode === "category"
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  style={{
+                    background: groupMode === "category" ? "var(--color-primary)" : "oklch(1 0 0 / 0.04)",
+                  }}
+                >
+                  <Tag className="size-3" />
+                  Group
+                </button>
+              )}
+              {hasCategories && (
+                <button
+                  onClick={() => setManagerOpen(true)}
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:text-foreground active:scale-90"
+                  style={{ background: "oklch(1 0 0 / 0.04)" }}
+                  aria-label="Manage categories"
+                >
+                  <Settings2 className="size-3.5" />
+                </button>
+              )}
+              {done.length > 0 && (
+                <button
+                  onClick={handleClearDone}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-all hover:text-red-400"
+                  style={{ background: "oklch(1 0 0 / 0.04)" }}
+                >
+                  <Trash2 className="size-3" />
+                  Clear done
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Category filter chips */}
+          {hasCategories && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <CategoryChip
+                label="All"
+                active={activeCategory === "all"}
+                onClick={() => setActiveCategory("all")}
+              />
+              {categories.map((cat) => (
+                <CategoryChip
+                  key={cat.id}
+                  label={cat.name}
+                  color={cat.color}
+                  active={activeCategory === cat.id}
+                  onClick={() =>
+                    setActiveCategory(activeCategory === cat.id ? "all" : cat.id)
+                  }
+                />
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ─────────────────────────────────────────────────── */}
       {todos.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
-          <ClipboardList className="size-10 text-muted-foreground/40" />
+        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed py-20 text-center" style={{ borderColor: "oklch(1 0 0 / 0.08)" }}>
+          <div
+            className="flex size-14 items-center justify-center rounded-2xl"
+            style={{ background: "oklch(1 0 0 / 0.04)" }}
+          >
+            <ClipboardList className="size-7 text-muted-foreground/40" />
+          </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">No tasks yet</p>
-            <p className="text-xs text-muted-foreground">Add your first task above</p>
+            <p className="text-xs text-muted-foreground">
+              Add your first task above to get started
+            </p>
           </div>
         </div>
       )}
 
       {visible.length === 0 && todos.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-border py-10 text-center text-xs text-muted-foreground">
-          No {filter} tasks
+        <div
+          className="rounded-2xl border border-dashed py-12 text-center text-xs text-muted-foreground"
+          style={{ borderColor: "oklch(1 0 0 / 0.08)" }}
+        >
+          No {filter !== "all" ? filter : ""} tasks
+          {activeCategory !== "all" ? " in this category" : ""}
         </div>
       )}
 
-      {/* List */}
+      {/* ── Task list / groups ──────────────────────────────────────────── */}
       {visible.length > 0 && (
-        <ul className="space-y-2">
-          {visible.map((todo) => (
-            <TodoItem key={todo.id} todo={todo} uid={user?.uid ?? ""} onReorder={handleReorder} />
+        <div className="space-y-5">
+          {groups.map((group, gi) => (
+            <div key={gi} className="space-y-2">
+              {group.label && (
+                <div className="flex items-center gap-2 px-1">
+                  {group.color && (
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ background: group.color }}
+                    />
+                  )}
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground/50">
+                    {group.items.length}
+                  </span>
+                  <div className="hairline flex-1" />
+                </div>
+              )}
+              <ul className="space-y-2">
+                {group.items.map((todo) => (
+                  <TodoItem
+                    key={todo.id}
+                    todo={todo}
+                    uid={uid}
+                    categories={categories}
+                    onReorder={handleReorder}
+                    onManageCategories={() => setManagerOpen(true)}
+                  />
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
-      {/* Footer summary */}
-      {active.length > 0 && (
-        <p className="text-center text-xs text-muted-foreground">
-          {active.length} task{active.length !== 1 ? "s" : ""} remaining
-        </p>
-      )}
+      <CategoryManager
+        open={managerOpen}
+        onOpenChange={setManagerOpen}
+        categories={categories}
+      />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// TodoItem
-// ---------------------------------------------------------------------------
-type TodoItemProps = {
-  todo: Todo;
-  uid: string;
-  onReorder: (dragId: string, overId: string) => void;
-};
-
-function TodoItem({ todo, uid, onReorder }: TodoItemProps) {
-  const { trigger: triggerConfetti } = useGlobalConfetti();
-  const checkboxRef = useRef<HTMLButtonElement>(null);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState(todo.text);
-  const [saving, setSaving] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const editRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) editRef.current?.focus();
-  }, [editing]);
-
-  // Keep editText in sync when todo.text changes externally
-  useEffect(() => {
-    if (!editing) setEditText(todo.text);
-  }, [todo.text, editing]);
-
-  async function handleToggle() {
-    if (!uid) return;
-    const completing = !todo.done;
-    if (completing) {
-      triggerConfetti(TODO_CONFETTI_COLOR, checkboxRef.current);
-      playDoneSound();
-    }
-    await toggleTodo(uid, todo.id, completing);
-  }
-
-  async function handleDelete() {
-    if (!uid) return;
-    await deleteTodo(uid, todo.id);
-  }
-
-  async function handleSaveEdit() {
-    if (!editText.trim() || editText.trim() === todo.text) {
-      setEditing(false);
-      setEditText(todo.text);
-      return;
-    }
-    if (!uid) return;
-    setSaving(true);
-    try {
-      await updateTodoText(uid, todo.id, editText);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ---- Drag-and-drop handlers ----
-  function handleDragStart(e: React.DragEvent) {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", todo.id);
-    setIsDragging(true);
-  }
-
-  function handleDragEnd() {
-    setIsDragging(false);
-    setIsDragOver(false);
-  }
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setIsDragOver(true);
-  }
-
-  function handleDragLeave() {
-    setIsDragOver(false);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragOver(false);
-    const dragId = e.dataTransfer.getData("text/plain");
-    if (dragId && dragId !== todo.id) {
-      onReorder(dragId, todo.id);
-    }
-  }
-
+// ── CategoryChip ────────────────────────────────────────────────────────────
+function CategoryChip({
+  label,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  color?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <li
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className="group flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 transition-all"
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 active:scale-95",
+        active ? "text-white" : "text-muted-foreground hover:text-foreground",
+      )}
       style={{
-        boxShadow: "var(--shadow-soft)",
-        borderColor: isDragOver ? "var(--color-primary)" : "var(--color-border)",
-        opacity: isDragging ? 0.4 : 1,
-        cursor: isDragging ? "grabbing" : "default",
+        background: active ? color ?? "var(--color-primary)" : "oklch(1 0 0 / 0.04)",
+        border: active ? "none" : "1px solid oklch(1 0 0 / 0.06)",
       }}
     >
-      {/* Drag handle */}
-      <span
-        className="shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
-        aria-hidden
-      >
-        <GripVertical className="size-4" />
-      </span>
-
-      {/* Checkbox */}
-      <button
-        ref={checkboxRef}
-        onClick={handleToggle}
-        className="flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-all active:scale-90"
-        style={{
-          borderColor: todo.done ? "var(--color-primary)" : "var(--color-border)",
-          background: todo.done ? "var(--color-primary)" : "transparent",
-        }}
-      >
-        {todo.done && <Check className="size-3 text-primary-foreground" strokeWidth={3} />}
-      </button>
-
-      {/* Text / Edit */}
-      {editing ? (
-        <input
-          ref={editRef}
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          onBlur={handleSaveEdit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSaveEdit();
-            if (e.key === "Escape") {
-              setEditing(false);
-              setEditText(todo.text);
-            }
-          }}
-          disabled={saving}
-          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
-        />
-      ) : (
-        <span
-          onDoubleClick={() => !todo.done && setEditing(true)}
-          className="flex-1 select-none text-sm"
-          style={{
-            color: todo.done ? "var(--color-muted-foreground)" : "var(--color-foreground)",
-            textDecoration: todo.done ? "line-through" : "none",
-          }}
-        >
-          {todo.text}
-        </span>
+      {color && !active && (
+        <span className="size-2 rounded-full" style={{ background: color }} />
       )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-1">
-        {!todo.done && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-[oklch(1_0_0_/_0.06)] hover:text-foreground active:scale-90"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-        )}
-        <button
-          onClick={handleDelete}
-          className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-[oklch(1_0_0_/_0.06)] hover:text-red-400 active:scale-90"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      </div>
-    </li>
+      {label}
+    </button>
   );
 }
