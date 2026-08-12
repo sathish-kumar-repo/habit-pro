@@ -12,6 +12,6 @@ export const FILTERS = [
 ] as const;
 
 export type FilterId = (typeof FILTERS)[number]["id"];
-export type AppTab = "today" | "habits" | "progress" | "todos";
+export type AppTab = "today" | "habits" | "progress" | "todos" | "journal";
 export type ProgressRange = "7d" | "30d" | "all";
 export type ProgressSort = "pct" | "streak" | "name";

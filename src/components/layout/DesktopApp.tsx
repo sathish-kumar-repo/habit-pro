@@ -18,12 +18,15 @@ import { DesktopToday } from "@/components/today/DesktopToday";
 import { DesktopHabits } from "@/components/habits/DesktopHabits";
 import { DesktopProgress } from "@/components/progress/DesktopProgress";
 import { TodoList } from "@/components/todos/TodoList";
+import { JournalView } from "@/components/journal/JournalView";
+import { BookOpen } from "lucide-react";
 
 const NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
   { id: "today", icon: <CheckCircle2 className="size-5" />, label: "Today" },
   { id: "habits", icon: <LayoutGrid className="size-5" />, label: "Habits" },
   { id: "progress", icon: <BarChart3 className="size-5" />, label: "Progress" },
   { id: "todos", icon: <ClipboardList className="size-5" />, label: "To-Do" },
+  { id: "journal", icon: <BookOpen className="size-5" />, label: "Journal" },
 ];
 
 type DesktopAppProps = AppProps & { user: User; onSignOut: () => void };
@@ -183,6 +186,7 @@ export function DesktopApp(p: DesktopAppProps) {
                   habits: "My Habits",
                   progress: "My Progress",
                   todos: "To-Do",
+                  journal: "Journal",
                 }[tab]
               }
             </h1>
@@ -227,6 +231,9 @@ export function DesktopApp(p: DesktopAppProps) {
               </div>
               <TodoList todos={p.todos} categories={p.categories} />
             </div>
+          )}
+          {tab === "journal" && (
+            <JournalView journals={p.journals} loading={p.journalsLoading} />
           )}
         </main>
       </div>

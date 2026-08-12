@@ -22,6 +22,7 @@ import {
   fmtDate,
 } from "@/lib/habits";
 import { Todo, Category, subscribeTodos, subscribeCategories } from "@/lib/todos";
+import { JournalEntry, subscribeJournals } from "@/lib/journal";
 import type { FilterId, AppTab, ProgressRange, ProgressSort } from "@/types/app";
 
 export function useAppData(uid: string) {
@@ -35,6 +36,9 @@ export function useAppData(uid: string) {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  const [journals, setJournals] = useState<JournalEntry[]>([]);
+  const [journalsLoading, setJournalsLoading] = useState(true);
 
   const [filter, setFilter] = useState<FilterId>("ongoing");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -95,6 +99,17 @@ export function useAppData(uid: string) {
     const unsub = subscribeCategories(uid, (data) => {
       setCategories(data);
       setCategoriesLoading(false);
+    });
+    return unsub;
+  }, [uid]);
+
+  // Subscribe to the authenticated user's journal entries
+  useEffect(() => {
+    if (!uid) return;
+    setJournalsLoading(true);
+    const unsub = subscribeJournals(uid, (data) => {
+      setJournals(data);
+      setJournalsLoading(false);
     });
     return unsub;
   }, [uid]);
@@ -434,6 +449,8 @@ export function useAppData(uid: string) {
     habitsError,
     todosLoading,
     todosError,
+    journals,
+    journalsLoading,
   };
 }
 

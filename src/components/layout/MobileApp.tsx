@@ -19,12 +19,15 @@ import { MobileTodaySkeleton } from "@/components/today/MobileTodaySkeleton";
 import { MobileHabits } from "@/components/habits/MobileHabits";
 import { MobileProgress } from "@/components/progress/MobileProgress";
 import { TodoList } from "@/components/todos/TodoList";
+import { JournalView } from "@/components/journal/JournalView";
+import { BookOpen } from "lucide-react";
 
 const BOTTOM_NAV: { id: AppTab; icon: React.ReactNode; label: string }[] = [
   { id: "today", icon: <CheckCircle2 className="size-5" />, label: "Today" },
   { id: "habits", icon: <LayoutGrid className="size-5" />, label: "Habits" },
   { id: "progress", icon: <BarChart3 className="size-5" />, label: "Progress" },
   { id: "todos", icon: <ClipboardList className="size-5" />, label: "To-Do" },
+  { id: "journal", icon: <BookOpen className="size-5" />, label: "Journal" },
 ];
 
 type MobileAppProps = AppProps & { user: User; onSignOut: () => void };
@@ -85,7 +88,7 @@ export function MobileApp(p: MobileAppProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {tab !== "today" && tab !== "todos" && (
+          {tab !== "today" && tab !== "todos" && tab !== "journal" && (
             <button
               onClick={() => setAddOpen(true)}
               className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-all active:scale-95"
@@ -344,6 +347,9 @@ export function MobileApp(p: MobileAppProps) {
               </div>
               <TodoList todos={p.todos} categories={p.categories} />
             </div>
+          )}
+          {tab === "journal" && (
+            <JournalView journals={p.journals} loading={p.journalsLoading} isMobile />
           )}
         </div>
       </div>
