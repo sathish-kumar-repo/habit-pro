@@ -272,14 +272,14 @@ export function TodoItem({
         {!todo.done && !editing && (
           <button
             onClick={() => setEditing(true)}
-            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/0 transition-all duration-200 hover:bg-[oklch(1_0_0_/_0.06)] hover:text-foreground group-hover:text-muted-foreground/60 active:scale-90"
+            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/60 opacity-100 transition-all duration-200 hover:bg-[oklch(1_0_0_/_0.06)] hover:text-foreground active:scale-90 sm:opacity-0 sm:group-hover:opacity-100"
           >
             <Pencil className="size-3.5" />
           </button>
         )}
         <button
           onClick={handleDelete}
-          className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/0 transition-all duration-200 hover:bg-[oklch(1_0_0_/_0.06)] hover:text-red-400 group-hover:text-muted-foreground/60 active:scale-90"
+          className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/60 opacity-100 transition-all duration-200 hover:bg-[oklch(1_0_0_/_0.06)] hover:text-red-400 active:scale-90 sm:opacity-0 sm:group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />
         </button>

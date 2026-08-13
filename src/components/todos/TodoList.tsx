@@ -217,7 +217,7 @@ export function TodoList({ todos, categories }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Add a new task…"
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           disabled={adding}
         />
         {hasCategories && (
@@ -245,10 +245,10 @@ export function TodoList({ todos, categories }: Props) {
       {/* ── Toolbar: filter tabs + actions ──────────────────────────────── */}
       {todos.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Segmented filter */}
             <div
-              className="flex gap-0.5 rounded-xl p-1"
+              className="flex flex-wrap gap-0.5 rounded-xl p-1"
               style={{ background: "oklch(1 0 0 / 0.04)" }}
             >
               {filterTabs.map((tab) => {
