@@ -329,12 +329,11 @@ export function JournalView({ journals, loading, isMobile }: Props) {
       {/* Stats */}
       {journals.length > 0 && (
         <div
-          className="grid grid-cols-3 divide-x rounded-2xl border py-3"
+          className="grid grid-cols-3 divide-x divide-[oklch(1_0_0_/_0.06)] rounded-2xl border py-3"
           style={{
             borderColor: "var(--color-border)",
             background: "var(--color-card)",
             boxShadow: "var(--shadow-soft)",
-            divideColor: "oklch(1 0 0 / 0.06)",
           }}
         >
           <Stat label="Entries" value={journals.length} />

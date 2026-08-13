@@ -344,7 +344,20 @@ function ColorPopover({
   function toggleOpen() {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      setCoords({ top: rect.bottom + 8, left: rect.left });
+      const margin = 16;
+      const panelWidth = Math.min(288, window.innerWidth - margin * 2); // matches w-[min(18rem,calc(100vw-2rem))]
+      const left = Math.min(
+        Math.max(rect.left, margin),
+        window.innerWidth - panelWidth - margin,
+      );
+      const rows = Math.ceil(colors.length / 6);
+      const estimatedHeight = rows * 36 + 24 + 40; // swatch rows + padding + clear button
+      const spaceBelow = window.innerHeight - rect.bottom - margin;
+      const top =
+        spaceBelow >= estimatedHeight
+          ? rect.bottom + 8
+          : Math.max(margin, rect.top - estimatedHeight - 8);
+      setCoords({ top, left });
     }
     setOpen((v) => !v);
   }
